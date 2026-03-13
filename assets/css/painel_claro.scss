@@ -1,0 +1,1165 @@
+// ========================================
+// VARIÁVEIS GERAIS (PALETA / TOKENS)
+// ========================================
+
+// Cores base
+$color-bg-main: #F4F6F8; // fundo principal
+$color-surface: #ffffff; // cards / superfícies
+$color-surface-alt: #F2F9FB; // superfícies suaves / avatares
+$color-primary-dark: #0B1924; // plano de fundo escuro
+$color-primary-dark-alpha: rgba(7, 15, 22, 0.3); // plano de fundo escuro
+$color-primary-soft: #7555FD; // tons suaves (barras, ícones)
+$color-border-soft: #c4c4cf; // bordas suaves
+$color-border: rgba(0, 0, 0, 0.08); // borda padrão
+$color-border-dark: #1f1f1f;
+$color-shadow: rgba(0, 0, 0, 0.15);
+
+// Ações / destaques
+$color-primary: #7555FD; // cor principal
+$color-primary-alt: #6366f1; // variação para foco
+$color-accent: #ff6363; // botões de alerta / destaque
+$color-success: #60e999; // texto verde
+$color-success-soft: #62fbbb; // fundo/botão sucesso
+$color-danger: #e96060; // texto vermelho
+$color-danger-soft: #fb6362; // fundo/botão danger
+$color-badge-primary: #eef1ff;
+
+// Tipografia
+$color-text: #232630; // texto principal
+$color-text-alt: #F2F9FB; // texto principal alternativo
+$color-text-muted: #666d86; // texto secundário
+$color-text-muted-alt: #ADBCC5; // texto secundário
+$color-title: #111827; // títulos
+
+// Específicos
+$color-sidebar: $color-primary-dark;
+$color-topbar-bg: $color-bg-main;
+$color-modal-bg: #ffffff;
+$color-modal-text: #111827;
+$color-modal-border: #ced4da;
+
+// Gradientes
+$gradient-text-d: linear-gradient(93deg, #35A1FF 0%, #7555FD 60%);
+$gradient-primary: linear-gradient(135deg, #35A1FF, #7555FD);
+$gradient-button: linear-gradient(45deg, #7555FD, #35A1FF);
+
+// Dimensões
+$radius-base: 5px;
+$radius-card: 10px;
+$radius-pill: 999px;
+$radius-avatar: 999px;
+
+// Z-index
+$z-search-dropdown: 1050;
+$z-sidebar-mobile: 9999;
+
+// Sombras
+$shadow-card: 0 0 20px rgba(15, 23, 42, 0.12);
+$shadow-card-hover: 0 8px 18px rgba(15, 23, 42, 0.12);
+$shadow-topbar-btn: 0 0 0 2px $color-shadow;
+$shadow-btn-primary: 0 10px 30px rgba(79, 70, 229, 0.35);
+$shadow-theme-picker: 0 0 0 2px rgba(124, 58, 237, 0.25);
+
+// Transições
+$transition-fast: 0.15s ease;
+$transition-med: 0.3s ease;
+
+// ========================================
+// PLACEHOLDERS / UTILITÁRIOS
+// ========================================
+
+%card-base {
+  background: $color-surface;
+  border-radius: $radius-base;
+  border: none !important;
+}
+
+%pill-radius {
+  border-radius: $radius-pill;
+}
+
+// ========================================
+// BASE / UTILITÁRIOS
+// ========================================
+
+html, body {
+  height: 100%;
+}
+
+.painel-pai {
+  min-height: 100vh;
+}
+
+.painel-pai > .row {
+  min-height: 100vh;
+}
+
+body {
+  background: $color-bg-main;
+  color: $color-text;
+}
+
+
+#financeiroTab {
+  .nav-link {
+    background: $color-text-muted-alt !important;
+    color: $color-text !important;
+
+    &:hover {
+      color: $color-text-alt !important;
+    }
+
+    &.active {
+      background-color: $color-primary !important;
+      color: #fff !important;
+    }
+  }
+}
+
+.fs-10 {
+  font-size: 10px;
+}
+
+.bg-clean,
+.bg-painel,
+.bg-light {
+  background-color: $color-bg-main !important;
+}
+
+.text-muted {
+  color: $color-text-muted !important;
+}
+
+.form-control-plaintext,
+.usuario {
+  color: $color-text !important;
+}
+
+
+.bg-success-subtle{
+  background: $color-success-soft !important;
+}
+
+.text-success{
+  color: #1A3D17 !important;
+}
+
+
+.bg-warning-subtle{
+  background: #FBE462 !important;
+}
+
+.text-warning{
+  color: #312D13 !important;
+}
+
+// ========================================
+// FORMULÁRIOS / INPUTS
+// ========================================
+
+.form-control,
+.form-select {
+  border-radius: 8px;
+  border: 1px solid $color-border;
+  background: $color-bg-main;
+  color: $color-text;
+}
+
+.form-control:focus,
+.form-select:focus {
+  border-color: $color-primary !important;
+  outline: 0;
+}
+
+.form-select option,
+.form-select option:checked {
+  background: transparent;
+  color: $color-primary !important;
+}
+
+.label-config {
+  color: $color-title;
+}
+
+// input type="date"
+.form-control[type="date"] {
+  background-color: $color-bg-main;
+  color: $color-text-muted;
+  border-color: $color-border;
+  font-size: 0.85rem;
+  padding: 0.4rem 0.75rem;
+}
+
+.form-control[type="date"]::-webkit-calendar-picker-indicator {
+  filter: invert(0.7);
+  cursor: pointer;
+}
+
+.form-control[type="date"]::-webkit-datetime-edit,
+.form-control[type="date"]::-webkit-datetime-edit-text,
+.form-control[type="date"]::-webkit-datetime-edit-year-field,
+.form-control[type="date"]::-webkit-datetime-edit-month-field,
+.form-control[type="date"]::-webkit-datetime-edit-day-field {
+  color: $color-text-muted;
+}
+
+.form-control[type="date"]:focus {
+  border-color: $color-primary-alt;
+}
+
+
+// Campo de busca topo
+#global-search {
+  background: $color-surface;
+  border-radius: $radius-base !important;
+  border: 0;
+  color: $color-text !important;
+  font-size: 0.85rem;
+
+  &::placeholder {
+    color: $color-text-muted;
+    opacity: 1;
+  }
+
+  &:focus {
+    border-color: $color-primary !important;
+  }
+}
+
+#search-results.search-results-dropdown {
+  left: 0;
+  right: 0;
+  width: 100%;
+}
+
+// Campo mês oculto
+.input-mes-oculto {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+// Wrapper de busca genérico
+.search-wrapper {
+  position: relative;
+  max-width: 260px;
+  width: 100%;
+
+  .search-icon {
+    position: absolute;
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    color: $color-text-muted;
+    font-size: 1rem;
+  }
+
+  .search-input {
+    width: 100%;
+    padding: 0.15rem 0.5rem 0.15rem 1.6rem;
+    border: 0;
+    background: transparent;
+    font-size: 0.85rem;
+
+    &:focus {
+      outline: 0;
+      box-shadow: none;
+    }
+  }
+}
+
+// ========================================
+// BUSCA GLOBAL (RESULTADOS)
+// ========================================
+
+.search-results-dropdown {
+  z-index: $z-search-dropdown;
+  max-height: 300px;
+  overflow-y: auto;
+  overflow-x: visible;
+  background: $color-text;
+  padding: 5px;
+  border-radius: 0 !important;
+  border: none !important;
+}
+
+#search-results {
+  border: none !important;
+  background: $color-surface;
+
+  .list-group-item {
+    background: $color-text;
+    border: none !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    margin-bottom: 5px;
+    white-space: normal;
+    color: $color-bg-main;
+
+    &:hover {
+      color: $color-primary;
+    }
+  }
+}
+
+// ========================================
+// BOTÕES
+// ========================================
+
+.btn {
+  color: $color-text !important;
+
+  &:hover {
+    color: $color-surface !important;
+  }
+}
+
+.btn-outline-primary,
+.btn-outline-danger,
+.btn-outline-secondary,
+.btn-op-perder,
+.btn-op-ganha,
+.btn-light,
+.btn-outline-light {
+  color: $color-surface !important;
+}
+
+.btn-relatorio {
+  border: 1px solid $color-text-muted-alt;
+  color: $color-text-muted-alt !important;
+
+  &:hover {
+    background: $color-text;
+  }
+}
+
+
+.btn-outline-secondary {
+  background: $color-text-muted;
+}
+
+.btn-outline-danger {
+  background: $color-danger-soft !important;
+}
+
+.btn-success,
+.btn-outline-success {
+  color: $color-text;
+  background: $color-success-soft !important;
+}
+
+button,
+.btn-primary {
+  background: $color-primary !important;
+  color: $color-surface !important;
+  border: none !important;
+
+  &:hover {
+    background-color: $color-primary !important;
+  }
+}
+
+.btn-light,
+.btn-outline-primary {
+  border: none !important;
+}
+
+.dropdown-item {
+  background-color: $color-surface !important;
+  color: $color-text !important;
+
+  &:hover {
+    background: none !important;
+    color: $color-primary !important;
+  }
+}
+
+// ========================================
+// CARDS / BOXES / KPI
+// ========================================
+
+.card,
+.cliente-card,
+.table-financeiro,
+.box-conteudo,
+.list-group-item {
+  @extend %card-base;
+  color: $color-text;
+}
+
+
+.icon-box {
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: $color-text-alt;
+  color: $color-primary !important;
+}
+
+.icon-box i {
+  color: $color-primary !important;
+}
+
+.icon-claro {
+  color: $color-surface !important;
+}
+
+.bg-dark {
+  background: $color-surface !important;
+  border: none;
+}
+
+.lead{
+  border: none;
+  background: $color-text-alt !important;
+  font-size: 1rem;
+}
+
+// KPI
+.card-kpi {
+  @extend %card-base;
+  border-radius: $radius-card;
+  color: $color-text;
+
+  .card-body {
+    padding: 14px 16px;
+  }
+}
+
+.card-kpi-label {
+  font-size: 0.8rem;
+  color: $color-text;
+}
+
+.card-kpi-icon {
+  width: 32px;
+  height: 32px;
+  margin-right: 10px !important;
+  border-radius: 8px;
+  background: $color-text-alt !important;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+  color: $color-primary;
+}
+
+.card-kpi-value {
+  font-size: 2.5rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.card-kpi-trend {
+  font-size: 0.8rem;
+}
+
+.card-kpi-footer {
+  border-top: 1px solid $color-border;
+  padding-top: 6px;
+  margin-top: 4px;
+}
+
+.card-kpi-sub {
+  font-size: 0.75rem;
+  color: $color-text;
+}
+
+// list-group dentro de card
+.card .list-group {
+  margin-top: 8px;
+
+  .list-group-item {
+    background: $color-surface;
+    color: $color-text;
+    padding-block: 0.55rem;
+    font-size: 0.8rem;
+
+    +.list-group-item {
+      border-top-color: $color-border-dark;
+    }
+
+    &:hover {
+      background: $color-bg-main;
+    }
+
+    .text-muted {
+      color: $color-text-muted !important;
+    }
+  }
+}
+
+// ========================================
+// HOSPEDAGENS
+// ========================================
+
+.hosp-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.hosp-list-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  border-bottom: 1px solid $color-text-alt;
+  color: $color-text-muted;
+  font-size: 0.82rem;
+
+  +.hosp-list-item {
+    margin-top: 1px;
+  }
+}
+
+.hosp-list-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: $radius-pill;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 8px;
+  font-size: 14px;
+  background: $color-surface;
+}
+
+.hosp-list-days {
+  font-size: 0.78rem;
+  color: $color-primary;
+}
+
+// ========================================
+// MODAIS
+// ========================================
+
+.modal-right .modal-dialog {
+  position: fixed;
+  top: 0;
+  right: 0;
+  margin: 0;
+  height: 100vh;
+  max-width: 600px;
+  transform: translateX(100%);
+  transition: transform $transition-med;
+}
+
+.modal-right .modal-content {
+  height: 100vh;
+  border-radius: 0;
+  background: $color-modal-bg;
+  color: $color-text;
+  border-left: 1px solid $color-title;
+}
+
+.btn-close-custom {
+  background: none !important;
+  border-radius: 4px;
+  opacity: 1;
+
+  &:hover {
+    background: none !important;
+    color: $color-primary !important;
+  }
+}
+
+
+
+.modal.fade.modal-right .modal-dialog {
+  transform: translateX(100%);
+}
+
+.modal.fade.modal-right.show .modal-dialog {
+  transform: translateX(0);
+}
+
+// Inputs dentro de modais com fundo claro
+.modal .form-control,
+.modal .form-select,
+.modal textarea.form-control {
+  background: $color-modal-bg;
+  color: $color-modal-text;
+  border: 1px solid $color-modal-border;
+}
+
+// ========================================
+// TABELAS
+// ========================================
+
+.table {
+  color: $color-text-muted;
+  font-size: 0.82rem;
+
+  thead {
+    background: $color-bg-main;
+  }
+
+  th {
+    border-color: $color-border;
+    background: $color-text-alt;
+    color: $color-text;
+    text-transform: uppercase;
+    font-size: 0.7rem;
+    letter-spacing: 0.08em;
+    padding: 8px 15px;
+  }
+
+  td {
+    border-color: $color-border;
+    background: $color-surface;
+    color: $color-text;
+    padding: 15px;
+  }
+
+  tr:hover td {
+    background: $color-bg-main;
+  }
+}
+
+.table-financeiro {
+  font-size: 0.8rem;
+
+  th {
+    font-weight: 600;
+    white-space: nowrap;
+  }
+
+  td {
+    white-space: nowrap;
+
+    &:nth-child(3) {
+      white-space: normal;
+    }
+  }
+}
+
+// ========================================
+// LAYOUT: PAINEL / SIDEBAR / TOPBAR
+// ========================================
+
+main#painel_content {
+  background: $color-bg-main !important;
+}
+
+// Wrapper lateral ocupa toda a altura da viewport
+.sv-sidebar-wrap {
+  flex: 0 0 260px;
+  min-height: 100vh;
+  background: $color-sidebar;
+  display: flex;           // garante que a sidebar interna possa crescer
+}
+
+// Sidebar interna: sticky + flex
+.sv-sidebar {
+  width: 260px;
+  color: $color-text;
+  display: flex;
+  flex-direction: column;
+
+  position: sticky;
+  top: 0;
+  min-height: 100vh;       // ocupa toda a faixa
+  max-height: 100vh;
+  overflow-y: auto;
+  background: transparent;
+}
+
+// Topo
+.sv-sidebar-top {
+  padding: 16px 16px 8px;
+  flex-shrink: 0;
+}
+
+// Marca
+.sv-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.sv-brand-logo {
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+}
+
+.sv-brand-text {
+  display: flex;
+  flex-direction: column;
+}
+
+.sv-brand-name {
+  font-weight: 600;
+  font-size: 14px;
+  color: $color-bg-main;
+}
+
+.sv-brand-sub {
+  font-size: 11px;
+  color: $color-text-muted;
+}
+
+// Menu ocupa o meio
+.sv-menu {
+  padding: 8px 8px 16px;
+  flex: 1 1 auto;          // espaço flexível entre topo e footer
+  overflow-y: auto;
+}
+
+.sv-menu-group + .sv-menu-group {
+  margin-top: 16px;
+}
+
+.sv-menu-title {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: $color-text-muted-alt;
+  margin: 0 12px 6px;
+}
+
+.sv-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  margin: 3px 8px;
+  color: $color-text-muted-alt;
+  text-decoration: none;
+  font-size: 16px;
+  border: 1px solid transparent;
+  transition:
+    background $transition-fast,
+    border-color $transition-fast,
+    box-shadow $transition-fast,
+    color $transition-fast;
+
+  .sv-icon {
+    width: 18px;
+    height: 18px;
+    border-radius: 10px;
+    background: transparent;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1rem;
+  }
+
+  .sv-badge {
+    margin-left: auto;
+    font-size: 11px;
+    color: $color-text-muted;
+  }
+
+  &:hover {
+    color: $color-primary;
+  }
+}
+
+.sv-menu-item--active {
+  background: $color-primary-dark-alpha;
+  border-left: 3px solid $color-primary !important;
+  color: $color-primary;
+}
+
+// Footer colado ao final
+.sv-sidebar-footer {
+  padding: 12px 12px 16px;
+  margin-top: auto;        // empurra para o fim da coluna
+  flex-shrink: 0;
+}
+
+.sv-cta {
+  @extend %card-base;
+  padding: 12px;
+  background: none !important;
+}
+
+.sv-cta-title {
+  font-size: 13px;
+  font-weight: 600;
+  margin: 0 0 4px;
+  color: $color-text-muted-alt;
+}
+
+.sv-cta-text {
+  font-size: 11px;
+  color: $color-text-muted-alt;
+  margin: 0 0 10px;
+}
+
+// Topbar
+#mobileTopbar {
+  position: sticky;
+  top: 0;
+  z-index: 1200;
+  background: $color-topbar-bg;
+}
+
+.topbar-conteudo {
+  background: $color-topbar-bg;
+  padding: 12px 20px;
+  margin: -16px -24px 24px -24px;
+
+  @media (max-width: 991.98px) {
+    margin: -25px -24px 24px -24px;
+  }
+}
+
+.topbar-conteudo form {
+  width: 100%;
+}
+
+.chevron-circle {
+  width: 24px;
+  height: 24px;
+  @extend %pill-radius;
+  background: $color-bg-main;
+  border: 1px solid $color-border;
+  color: $color-text;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.topbar-divider {
+  width: 1px;
+  height: 28px;
+  background: $color-text-muted;
+}
+
+// Responsivo
+@media (min-width: 992px) {
+  #painel_content {
+    padding: 1rem 1.5rem 0;
+    min-height: 100vh;
+  }
+}
+
+@media (max-width: 991.98px) {
+  .sidebar {
+    position: fixed;
+    top: 0;
+    left: -100vw;
+    width: 100vw;
+    height: 100vh;
+    transition: left $transition-med;
+    box-shadow: $shadow-card;
+    z-index: $z-sidebar-mobile;
+
+    &.show {
+      left: 0;
+    }
+  }
+
+  #mobileTopbar {
+    margin: -16px -24px 24px -24px;
+  }
+}
+
+// ========================================
+// TIPOGRAFIA / TEXTOS ESPECIAIS
+// ========================================
+
+.text-bg-d {
+  background: $gradient-text-d;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  text-fill-color: transparent;
+}
+
+.text-entradas {
+  color: $color-success;
+}
+
+.text-saidas {
+  color: $color-danger;
+}
+
+// ========================================
+// COMPONENTES: FILTROS / CLIENTE
+// ========================================
+
+.filtros-tarefas {
+  .btn-status {
+    margin-right: 0.5rem;
+    margin-bottom: 0.35rem;
+    background: $color-text-alt;
+    color: $color-text-muted;
+    font-weight: 500;
+    @extend %pill-radius;
+    padding-inline: 0.9rem;
+    padding-block: 0.25rem;
+    font-size: 0.8rem;
+
+    &:hover {
+      background: $color-primary;
+      border-color: rgba(15, 23, 42, 0.12);
+      color: $color-surface;
+    }
+
+    &-active {
+      background: $color-primary;
+      border-color: transparent;
+      color: $color-surface !important;
+    }
+  }
+}
+
+.cliente-card {
+  border-radius: 14px;
+  transition: transform $transition-fast, box-shadow $transition-fast;
+
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: $shadow-card-hover;
+  }
+}
+
+.cliente-foto {
+  width: 120px;
+  height: 120px;
+  max-width: 300px;
+  max-height: 300px;
+  object-fit: cover;
+  border-radius: $radius-avatar;
+  border: 3px solid $color-surface-alt;
+}
+
+.cliente-avatar {
+  width: 80px;
+  height: 80px;
+  border-radius: $radius-avatar;
+  background: $color-surface-alt;
+  color: #1d4ed8;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 0.9rem;
+
+  img.cliente-foto {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: $radius-avatar;
+    border: 0;
+  }
+}
+
+.cliente-card .card-body {
+  width: 100%;
+}
+
+.cliente-card .card-cliente-nome {
+  width: 100%;          /* garante limite */
+  text-align: center;   /* mantém centralizado */
+}
+
+
+.card-cliente-nome {
+  display: block !important;
+  max-width: 100% !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+
+
+.badge-cliente{
+  margin-top: 30px;
+  padding: 7px 15px;
+  font-weight: 600;
+  border-radius: 5px;
+}
+
+// ========================================
+// TRATAMENTO DE DADOS / VISUAL
+// ========================================
+
+.sensitive-value {
+  transition: opacity $transition-fast;
+}
+
+.sensitive-hidden {
+  opacity: 0.7;
+}
+
+.mod-view {
+  transition: opacity $transition-fast;
+  opacity: 1;
+}
+
+.mod-view.mod-fade-out {
+  opacity: 0;
+}
+
+// ========================================
+// THEME PICKER
+// ========================================
+
+.theme-picker {
+  margin-top: 1rem;
+}
+
+.theme-option {
+  width: 24px;
+  height: 24px;
+  border: 2px solid transparent;
+  cursor: pointer;
+  padding: 0;
+  outline: none;
+}
+
+.theme-option[data-theme='dark'] {
+  background: #141414 !important;
+}
+
+.theme-option[data-theme='light'] {
+  background: #e5e7eb !important;
+}
+
+.theme-option.is-active {
+  border-color: #7c3aed;
+  box-shadow: $shadow-theme-picker;
+}
+
+
+
+/* Caixa geral */
+.flatpickr-calendar.flatpickr-monthSelect-theme-light {
+  border-radius: 8px;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.15);
+  border: none;
+  background: #ffffff;
+  min-width: 260px;
+  padding-top: 0;
+}
+
+.flatpickr-calendar.arrowTop:before {
+  display: none;
+}
+
+.flatpickr-month {
+  background: none !important;
+}
+
+/* Header azul com ano centralizado */
+.flatpickr-calendar.flatpickr-monthSelect-theme-light .flatpickr-months {
+  background-color: $color-primary-dark;
+  color: $color-text-alt;
+  border-radius: 8px 8px 0 0;
+  padding: 6px 10px;
+  align-items: center;
+}
+
+/* Tira o fundo branco padrão do ano */
+.flatpickr-calendar.flatpickr-monthSelect-theme-light .flatpickr-current-month {
+  display: flex;
+  justify-content: center;
+  flex: 1;
+}
+
+.flatpickr-calendar.flatpickr-monthSelect-theme-light .flatpickr-current-month .numInputWrapper {
+  background: transparent;
+  border: none;
+}
+
+.flatpickr-calendar.flatpickr-monthSelect-theme-light .flatpickr-current-month .numInput.cur-year {
+  background: transparent;
+  border: none;
+  color: #ffffff;
+  font-weight: 600;
+  font-size: 14px;
+  text-align: center;
+}
+
+/* Setas do header em branco */
+.flatpickr-calendar.flatpickr-monthSelect-theme-light .flatpickr-prev-month svg,
+.flatpickr-calendar.flatpickr-monthSelect-theme-light .flatpickr-next-month svg {
+  fill: #ffffff;
+}
+
+/* Container dos meses */
+.flatpickr-calendar.flatpickr-monthSelect-theme-light .flatpickr-monthSelect-months {
+  padding: 8px 10px 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 8px;
+  /* espaçamento entre meses */
+  justify-content: flex-start;
+}
+
+/* Cada mês */
+.flatpickr-calendar.flatpickr-monthSelect-theme-light .flatpickr-monthSelect-month {
+  padding: 4px 6px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  color: #333;
+}
+
+/* Hover */
+.flatpickr-calendar.flatpickr-monthSelect-theme-light .flatpickr-monthSelect-month:hover {
+  background-color: #f1f5f9;
+}
+
+/* Selecionado (mês atual) */
+.flatpickr-calendar.flatpickr-monthSelect-theme-light .flatpickr-monthSelect-month.selected {
+  background-color: $color-text-alt;
+  color: $color-primary-dark;
+  font-weight: 600;
+}
+
+#filtroMes {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+  width: 0;
+  height: 0;
+}
+
+
+.texto-status {
+  color: $color-primary-dark !important;
+}
+
+.icone-acao {
+  background: none !important;
+
+  &:hover {
+    background: none !important;
+  }
+}
+
+.icone-acao i {
+  color: $color-primary;
+  font-size: 20px !important;
+}
+
+.icon-service {
+  color: $color-primary-dark !important;
+}
+
+.acoes {
+  justify-content: center;
+}
+
+.badge-service {
+  padding: 3px 7px;
+  border-radius: 5px;
+}
+
+
+

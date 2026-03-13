@@ -1,0 +1,174 @@
+/* ========================================
+   CORES DO TEMA (mesmas do painel.scss)
+   ======================================== */
+:root {
+  --fd-bg-main: #141414;
+  --fd-border-dark: #1f1f1f;
+  --fd-border: #060606;
+  --fd-shadow: #222222;
+  --fd-text: #f9f9f9;
+  --fd-text-muted: #a3a3a3;
+  --fd-primary: #6560e9;
+  --fd-primary-soft: #9491f3;
+}
+
+/* ========================================
+   LAYOUT BASE
+   ======================================== */
+body {
+  background: url('http://flowdesk.site/assets/img/bg_login_page.webp') no-repeat center/auto;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: url('https://cdn.snappages.com.br/imagens/component-assets/Cursor-degrade-roxo-seta.svg') 0 0, auto;
+  color: var(--fd-text);
+}
+
+.login-container {
+  padding-top: 50px;
+}
+
+/* ========================================
+   ÁREAS (FORM / HERO)
+   ======================================== */
+
+.form-section,
+.bg-form {
+  background: var(--fd-bg-main);
+}
+
+.hero-section {
+  background: url(/assets/img/bg_login.png) center;
+  background-size: cover;
+}
+
+/* ========================================
+   INPUTS / INPUT-GROUP
+   ======================================== */
+
+.form-control {
+  background-color: var(--fd-bg-main);
+  border: 1px solid var(--fd-border);
+  box-shadow: 0 0 0 2px var(--fd-shadow);
+  color: var(--fd-text);
+  border-radius: 10px;
+}
+
+.form-control::placeholder {
+  color: var(--fd-text-muted);
+}
+
+.form-control:focus {
+  background-color: var(--fd-bg-main);
+  color: var(--fd-text);
+  border-color: var(--fd-primary);
+  box-shadow: 0 0 0 .12rem rgba(101, 96, 233, .45);
+}
+
+.input-group-text {
+  background-color: var(--fd-bg-main);
+  border: 1px solid var(--fd-border);
+  box-shadow: 0 0 0 2px var(--fd-shadow);
+  color: var(--fd-text-muted);
+}
+
+/* ========================================
+   TABS SUPER (LOGIN / CADASTRO)
+   ======================================== */
+
+.super-tabs {
+  width: 370px;
+  display: flex;
+  gap: 0;
+  background: var(--fd-bg-main);
+  border-radius: 2rem;
+  border: 1.5px solid var(--fd-border-dark);
+  box-shadow: 0 0 0 2px var(--fd-shadow);
+  padding: 3px;
+}
+
+.super-tab {
+  flex: 1;
+  height: 30px;
+  font-size: 1rem;
+  font-weight: 500;
+  border: none;
+  border-radius: 2rem;
+  background: transparent;
+  color: var(--fd-primary);
+  transition: background .2s, color .2s;
+  margin: 0;
+  outline: none;
+  box-shadow: none;
+}
+
+.super-tab.active {
+  background: var(--fd-primary);
+  color: #fff;
+}
+
+.super-tab:not(.active) {
+  background: transparent;
+  color: var(--fd-primary);
+}
+
+.super-tab:focus {
+  outline: none;
+}
+
+/* ========================================
+   BOTÕES
+   ======================================== */
+
+.btn-social {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: .75rem;
+  font-weight: 500;
+  margin-bottom: .75rem;
+  border-radius: 24px;
+  padding: .75rem 1rem;
+  background: var(--fd-bg-main);
+  border: 1px solid var(--fd-border);
+  box-shadow: 0 0 0 2px var(--fd-shadow);
+  color: var(--fd-text);
+}
+
+.tab-btn-group .btn {
+  border-radius: 24px;
+  width: 50%;
+}
+
+.btn-entrar{
+  background: var(--fd-primary) !important;
+  color: var(--fd-text);
+
+  &:hover{
+     background: var(--fd-primary-soft) !important;
+  }
+}
+
+.form-check-input:checked {
+    background-color: var(--fd-primary-soft);
+    border-color: var(--fd-primary);
+}
+
+.text-esqueci{
+  color: var(--fd-primary) !important;
+}
+
+/* ========================================
+   RESPONSIVO
+   ======================================== */
+
+@media (max-width: 800px) {
+  .login-container {
+    flex-direction: column;
+  }
+
+  .art-side {
+    min-height: 220px;
+  }
+}
