@@ -4,10 +4,21 @@
 class FinanceiroModel
 {
     private PDO $pdo;
+    private int $workspaceId;
 
     public function __construct(PDO $pdo)
     {
         $this->pdo = $pdo;
+        $this->workspaceId = fd_current_workspace_id() ?? 0;
+    }
+
+    private function currentWorkspaceId(): int
+    {
+        if ($this->workspaceId <= 0) {
+            throw new RuntimeException('Workspace atual nao definido para financeiro.');
+        }
+
+        return $this->workspaceId;
     }
 
     /* Utilitário */
@@ -30,7 +41,10 @@ class FinanceiroModel
 
     public function criarEntrada(array $data): bool
     {
-        $cliente_id = isset($data['cliente_id']) ? (int) $data['cliente_id'] : null;
+        $cliente_id_raw = $data['cliente_id'] ?? null;
+        $cliente_id = ($cliente_id_raw === '' || $cliente_id_raw === null)
+            ? null
+            : (int) $cliente_id_raw;
         $data_lanc = $data['data_lancamento'] ?? date('Y-m-d');
         $descricao = trim($data['descricao'] ?? '');
         $servico = $data['servico'] ?? 'outro';
@@ -47,23 +61,31 @@ class FinanceiroModel
 
         $sql = '
           INSERT INTO financeiro_entradas
-          (cliente_id, data_lancamento, descricao, servico, tipo_pagamento, forma_pagamento,
+          (workspace_id, cliente_id, data_lancamento, descricao, servico, tipo_pagamento, forma_pagamento,
            valor_a_receber, valor_recebido, concluido, observacoes, criado_em)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
+          VALUES (:workspace_id, :cliente_id, :data_lancamento, :descricao, :servico, :tipo_pagamento, :forma_pagamento,
+                  :valor_a_receber, :valor_recebido, :concluido, :observacoes, NOW())
         ';
         $stmt = $this->pdo->prepare($sql);
-        return $stmt->execute([
-            $cliente_id,
-            $data_lanc,
-            $descricao,
-            $servico,
-            $tipo,
-            $forma,
-            $valor_rec,
-            $valor_recib,
-            $concluido,
-            $obs
-        ]);
+        $stmt->bindValue(':workspace_id', $this->currentWorkspaceId(), PDO::PARAM_INT);
+
+        if ($cliente_id === null) {
+            $stmt->bindValue(':cliente_id', null, PDO::PARAM_NULL);
+        } else {
+            $stmt->bindValue(':cliente_id', $cliente_id, PDO::PARAM_INT);
+        }
+
+        $stmt->bindValue(':data_lancamento', $data_lanc);
+        $stmt->bindValue(':descricao', $descricao);
+        $stmt->bindValue(':servico', $servico);
+        $stmt->bindValue(':tipo_pagamento', $tipo);
+        $stmt->bindValue(':forma_pagamento', $forma);
+        $stmt->bindValue(':valor_a_receber', $valor_rec);
+        $stmt->bindValue(':valor_recebido', $valor_recib);
+        $stmt->bindValue(':concluido', $concluido, PDO::PARAM_INT);
+        $stmt->bindValue(':observacoes', $obs);
+
+        return $stmt->execute();
     }
 
     public function buscarEntrada(int $id): ?array
@@ -71,9 +93,9 @@ class FinanceiroModel
         $stmt = $this->pdo->prepare("
         SELECT *
         FROM financeiro_entradas
-        WHERE id = ?
+        WHERE id = ? AND workspace_id = ?
     ");
-        $stmt->execute([$id]);
+        $stmt->execute([$id, $this->currentWorkspaceId()]);
         $row = $stmt->fetch(PDO::FETCH_ASSOC);
         return $row ?: null;
     }
@@ -114,6 +136,7 @@ class FinanceiroModel
             observacoes     = :obs,
             atualizado_em   = NOW()
         WHERE id = :id
+          AND workspace_id = :workspace_id
     ';
 
         $stmt = $this->pdo->prepare($sql);
@@ -134,6 +157,7 @@ class FinanceiroModel
         $stmt->bindValue(':concluido', $concluido, \PDO::PARAM_INT);
         $stmt->bindValue(':obs', $obs);
         $stmt->bindValue(':id', $id, \PDO::PARAM_INT);
+        $stmt->bindValue(':workspace_id', $this->currentWorkspaceId(), \PDO::PARAM_INT);
 
         return $stmt->execute();
     }
@@ -143,8 +167,8 @@ class FinanceiroModel
 
     public function excluirEntrada(int $id): bool
     {
-        $stmt = $this->pdo->prepare('DELETE FROM financeiro_entradas WHERE id = ?');
-        return $stmt->execute([$id]);
+        $stmt = $this->pdo->prepare('DELETE FROM financeiro_entradas WHERE id = ? AND workspace_id = ?');
+        return $stmt->execute([$id, $this->currentWorkspaceId()]);
     }
 
     /* ------------ SAÍDAS ------------ */
@@ -163,17 +187,17 @@ class FinanceiroModel
 
         $sql = '
           INSERT INTO financeiro_saidas
-          (data_lancamento, tipo, descricao, valor, observacoes, criado_em)
-          VALUES (?, ?, ?, ?, ?, NOW())
+          (workspace_id, data_lancamento, tipo, descricao, valor, observacoes, criado_em)
+          VALUES (?, ?, ?, ?, ?, ?, NOW())
         ';
         $stmt = $this->pdo->prepare($sql);
-        return $stmt->execute([$data_lanc, $tipo, $descricao, $valor, $obs]);
+        return $stmt->execute([$this->currentWorkspaceId(), $data_lanc, $tipo, $descricao, $valor, $obs]);
     }
 
     public function excluirSaida(int $id): bool
     {
-        $stmt = $this->pdo->prepare('DELETE FROM financeiro_saidas WHERE id = ?');
-        return $stmt->execute([$id]);
+        $stmt = $this->pdo->prepare('DELETE FROM financeiro_saidas WHERE id = ? AND workspace_id = ?');
+        return $stmt->execute([$id, $this->currentWorkspaceId()]);
     }
 
     public function criarSaidaParaFixo(array $fixo, float $valor): bool
@@ -184,11 +208,12 @@ class FinanceiroModel
 
         $sql = '
           INSERT INTO financeiro_saidas
-          (fixo_id, data_lancamento, tipo, descricao, valor, observacoes, criado_em)
-          VALUES (?, ?, ?, ?, ?, ?, NOW())
+          (workspace_id, fixo_id, data_lancamento, tipo, descricao, valor, observacoes, criado_em)
+          VALUES (?, ?, ?, ?, ?, ?, ?, NOW())
         ';
         $stmt = $this->pdo->prepare($sql);
         return $stmt->execute([
+            $this->currentWorkspaceId(),
             $fixo['id'],
             $hoje,
             'pagamentos',
@@ -216,12 +241,13 @@ class FinanceiroModel
 
         $sql = '
           INSERT INTO financeiro_fixos
-          (tipo_gasto, valor, eh_parcelado, parcelas_totais, parcelas_restantes,
+          (workspace_id, tipo_gasto, valor, eh_parcelado, parcelas_totais, parcelas_restantes,
            data_inicio, ativo, observacoes, criado_em)
-          VALUES (?, ?, ?, ?, ?, ?, 1, ?, NOW())
+          VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, NOW())
         ';
         $stmt = $this->pdo->prepare($sql);
         return $stmt->execute([
+            $this->currentWorkspaceId(),
             $tipo_gasto,
             $valor,
             $eh_parcelado,
@@ -237,16 +263,16 @@ class FinanceiroModel
         $sql = "
           UPDATE financeiro_fixos
           SET status_mes = 'pago', atualizado_em = NOW()
-          WHERE id = ? AND ativo = 1
+          WHERE id = ? AND ativo = 1 AND workspace_id = ?
         ";
         $stmt = $this->pdo->prepare($sql);
-        return $stmt->execute([$id]);
+        return $stmt->execute([$id, $this->currentWorkspaceId()]);
     }
 
     public function buscarFixoAtivo(int $id): ?array
     {
-        $stmt = $this->pdo->prepare("SELECT * FROM financeiro_fixos WHERE id = ? AND ativo = 1");
-        $stmt->execute([$id]);
+        $stmt = $this->pdo->prepare("SELECT * FROM financeiro_fixos WHERE id = ? AND ativo = 1 AND workspace_id = ?");
+        $stmt->execute([$id, $this->currentWorkspaceId()]);
         $f = $stmt->fetch(PDO::FETCH_ASSOC);
         return $f ?: null;
     }
@@ -257,17 +283,17 @@ class FinanceiroModel
         $sql = "
           UPDATE financeiro_fixos
           SET parcelas_restantes = ?, ativo = ?, atualizado_em = NOW()
-          WHERE id = ?
+          WHERE id = ? AND workspace_id = ?
         ";
         $stmt = $this->pdo->prepare($sql);
-        return $stmt->execute([$restantes, $ativo, $id]);
+        return $stmt->execute([$restantes, $ativo, $id, $this->currentWorkspaceId()]);
     }
 
     public function desativarFixo(int $id): bool
     {
-        $sql = "UPDATE financeiro_fixos SET ativo = 0, atualizado_em = NOW() WHERE id = ?";
+        $sql = "UPDATE financeiro_fixos SET ativo = 0, atualizado_em = NOW() WHERE id = ? AND workspace_id = ?";
         $stmt = $this->pdo->prepare($sql);
-        return $stmt->execute([$id]);
+        return $stmt->execute([$id, $this->currentWorkspaceId()]);
     }
 
     public function totaisMes(string $inicio, string $fim): array
@@ -276,25 +302,27 @@ class FinanceiroModel
         $stmt = $this->pdo->prepare("
         SELECT COALESCE(SUM(valor_recebido), 0) AS total
         FROM financeiro_entradas
-        WHERE data_lancamento BETWEEN ? AND ?
+        WHERE workspace_id = ? AND data_lancamento BETWEEN ? AND ?
     ");
-        $stmt->execute([$inicio, $fim]);
+        $stmt->execute([$this->currentWorkspaceId(), $inicio, $fim]);
         $entradas = (float) $stmt->fetchColumn();
 
         // saídas do mês
         $stmt = $this->pdo->prepare("
         SELECT COALESCE(SUM(valor), 0) AS total
         FROM financeiro_saidas
-        WHERE data_lancamento BETWEEN ? AND ?
+        WHERE workspace_id = ? AND data_lancamento BETWEEN ? AND ?
     ");
-        $stmt->execute([$inicio, $fim]);
+        $stmt->execute([$this->currentWorkspaceId(), $inicio, $fim]);
         $saidas = (float) $stmt->fetchColumn();
 
         // caixa total histórico
-        $stmt = $this->pdo->query("SELECT COALESCE(SUM(valor_recebido),0) FROM financeiro_entradas");
+        $stmt = $this->pdo->prepare("SELECT COALESCE(SUM(valor_recebido),0) FROM financeiro_entradas WHERE workspace_id = ?");
+        $stmt->execute([$this->currentWorkspaceId()]);
         $caixaEntradas = (float) $stmt->fetchColumn();
 
-        $stmt = $this->pdo->query("SELECT COALESCE(SUM(valor),0) FROM financeiro_saidas");
+        $stmt = $this->pdo->prepare("SELECT COALESCE(SUM(valor),0) FROM financeiro_saidas WHERE workspace_id = ?");
+        $stmt->execute([$this->currentWorkspaceId()]);
         $caixaSaidas = (float) $stmt->fetchColumn();
 
         $caixaTotal = $caixaEntradas - $caixaSaidas;
@@ -314,10 +342,10 @@ class FinanceiroModel
         SELECT e.*, c.nome AS cliente_nome
         FROM financeiro_entradas e
         LEFT JOIN clientes c ON c.id = e.cliente_id
-        WHERE e.data_lancamento BETWEEN ? AND ?
+        WHERE e.workspace_id = ? AND e.data_lancamento BETWEEN ? AND ?
         ORDER BY e.data_lancamento DESC, e.id DESC
     ");
-        $stmt->execute([$inicio, $fim]);
+        $stmt->execute([$this->currentWorkspaceId(), $inicio, $fim]);
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 
@@ -326,10 +354,10 @@ class FinanceiroModel
         $stmt = $this->pdo->prepare("
         SELECT *
         FROM financeiro_saidas
-        WHERE data_lancamento BETWEEN ? AND ?
+        WHERE workspace_id = ? AND data_lancamento BETWEEN ? AND ?
         ORDER BY data_lancamento DESC, id DESC
     ");
-        $stmt->execute([$inicio, $fim]);
+        $stmt->execute([$this->currentWorkspaceId(), $inicio, $fim]);
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 
@@ -339,9 +367,10 @@ class FinanceiroModel
         SELECT DISTINCT fixo_id
         FROM financeiro_saidas
         WHERE fixo_id IS NOT NULL
+          AND workspace_id = ?
           AND data_lancamento BETWEEN ? AND ?
     ");
-        $stmt->execute([$inicio, $fim]);
+        $stmt->execute([$this->currentWorkspaceId(), $inicio, $fim]);
         return $stmt->fetchAll(PDO::FETCH_COLUMN);
     }
 
@@ -350,11 +379,12 @@ class FinanceiroModel
         $stmt = $this->pdo->prepare("
         SELECT *
         FROM financeiro_fixos
-        WHERE ativo = 1
+        WHERE workspace_id = ?
+          AND ativo = 1
           AND data_inicio <= ?
         ORDER BY tipo_gasto ASC
     ");
-        $stmt->execute([$dataLimite]);
+        $stmt->execute([$this->currentWorkspaceId(), $dataLimite]);
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 
@@ -363,17 +393,19 @@ class FinanceiroModel
         $stmt = $this->pdo->prepare("
         SELECT COALESCE(SUM(f.valor),0) AS total
         FROM financeiro_fixos f
-        WHERE f.ativo = 1
+        WHERE f.workspace_id = ?
+          AND f.ativo = 1
           AND f.data_inicio <= ?
           AND (f.eh_parcelado = 0 OR (f.eh_parcelado = 1 AND f.parcelas_totais >= 1))
           AND f.id NOT IN (
               SELECT DISTINCT fixo_id
               FROM financeiro_saidas
               WHERE fixo_id IS NOT NULL
+                AND workspace_id = ?
                 AND data_lancamento BETWEEN ? AND ?
           )
     ");
-        $stmt->execute([$dataLimite, $inicio, $fim]);
+        $stmt->execute([$this->currentWorkspaceId(), $dataLimite, $this->currentWorkspaceId(), $inicio, $fim]);
         return (float) $stmt->fetchColumn();
     }
 
@@ -382,9 +414,9 @@ class FinanceiroModel
         $stmt = $this->pdo->prepare("
             SELECT COALESCE(SUM(valor_recebido), 0) AS total
             FROM financeiro_entradas
-            WHERE data_lancamento BETWEEN ? AND ?
+            WHERE workspace_id = ? AND data_lancamento BETWEEN ? AND ?
         ");
-        $stmt->execute([$inicio, $fim]);
+        $stmt->execute([$this->currentWorkspaceId(), $inicio, $fim]);
         return (float) $stmt->fetchColumn();
     }
 
@@ -393,9 +425,9 @@ class FinanceiroModel
         $stmt = $this->pdo->prepare("
             SELECT COALESCE(SUM(valor), 0) AS total
             FROM financeiro_saidas
-            WHERE data_lancamento BETWEEN ? AND ?
+            WHERE workspace_id = ? AND data_lancamento BETWEEN ? AND ?
         ");
-        $stmt->execute([$inicio, $fim]);
+        $stmt->execute([$this->currentWorkspaceId(), $inicio, $fim]);
         return (float) $stmt->fetchColumn();
     }
 
@@ -407,12 +439,17 @@ class FinanceiroModel
         $sql = "
         SELECT tipo, SUM(valor) AS total
         FROM financeiro_saidas
-        WHERE data_lancamento BETWEEN :inicio AND :fim
+        WHERE workspace_id = :workspace_id
+          AND data_lancamento BETWEEN :inicio AND :fim
         GROUP BY tipo
         ORDER BY total DESC
     ";
         $st = $this->pdo->prepare($sql);
-        $st->execute([':inicio' => $inicio, ':fim' => $fim]);
+        $st->execute([
+            ':workspace_id' => $this->currentWorkspaceId(),
+            ':inicio' => $inicio,
+            ':fim' => $fim,
+        ]);
         return $st->fetchAll(PDO::FETCH_ASSOC);
     }
 
@@ -426,12 +463,17 @@ class FinanceiroModel
         SELECT DATE_FORMAT(data_lancamento, '%m') AS mes,
                SUM(valor_recebido) AS total
         FROM financeiro_entradas
-        WHERE data_lancamento BETWEEN :inicio AND :fim
+        WHERE workspace_id = :workspace_id
+          AND data_lancamento BETWEEN :inicio AND :fim
         GROUP BY mes
         ORDER BY mes
     ";
         $stEnt = $this->pdo->prepare($sqlEnt);
-        $stEnt->execute([':inicio' => $inicio, ':fim' => $fim]);
+        $stEnt->execute([
+            ':workspace_id' => $this->currentWorkspaceId(),
+            ':inicio' => $inicio,
+            ':fim' => $fim,
+        ]);
         $rowsEnt = $stEnt->fetchAll(PDO::FETCH_ASSOC);
 
         // SAÍDAS
@@ -439,12 +481,17 @@ class FinanceiroModel
         SELECT DATE_FORMAT(data_lancamento, '%m') AS mes,
                SUM(valor) AS total
         FROM financeiro_saidas
-        WHERE data_lancamento BETWEEN :inicio AND :fim
+        WHERE workspace_id = :workspace_id
+          AND data_lancamento BETWEEN :inicio AND :fim
         GROUP BY mes
         ORDER BY mes
     ";
         $stSai = $this->pdo->prepare($sqlSai);
-        $stSai->execute([':inicio' => $inicio, ':fim' => $fim]);
+        $stSai->execute([
+            ':workspace_id' => $this->currentWorkspaceId(),
+            ':inicio' => $inicio,
+            ':fim' => $fim,
+        ]);
         $rowsSai = $stSai->fetchAll(PDO::FETCH_ASSOC);
 
         // preenche 12 meses com zero

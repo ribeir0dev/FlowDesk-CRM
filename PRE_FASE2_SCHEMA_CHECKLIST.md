@@ -1,0 +1,81 @@
+# Pre-Fase 2 - Padronizacao Estrutural do Banco
+
+Use esta checklist antes de rodar a migracao multi-tenant.
+
+## Objetivo
+
+Padronizar tipos de IDs, colunas de relacionamento, FKs e alguns pontos estruturais do schema atual para reduzir retrabalho na Fase 2.
+
+## Regras
+
+- Marque `[x]` apenas quando a etapa estiver concluida e validada.
+- Rode primeiro em ambiente local.
+- Faça backup antes de qualquer `ALTER TABLE`.
+- Valide cada bloco antes de seguir para o proximo.
+
+---
+
+## Bloco 1 - Backup e diagnostico
+
+- [ ] Fazer backup completo do banco `db_flowdesk`.
+- [ ] Confirmar a estrutura atual de PKs, FKs e índices no ambiente local.
+- [ ] Conferir se não há dados órfãos antes de recriar constraints.
+- [ ] Confirmar quais tabelas fazem parte do core da aplicação atual.
+
+---
+
+## Bloco 2 - Padronizacao de IDs
+
+- [ ] Padronizar `usuarios.id` para `INT UNSIGNED NOT NULL AUTO_INCREMENT`.
+- [ ] Padronizar `modelos.id` para `INT UNSIGNED NOT NULL AUTO_INCREMENT`.
+- [ ] Confirmar que todas as tabelas operacionais já usam `INT UNSIGNED` nas PKs.
+- [ ] Confirmar que todas as colunas FK que apontam para PKs `INT UNSIGNED` também estão como `INT UNSIGNED`.
+
+---
+
+## Bloco 3 - Revisao de FKs existentes
+
+- [ ] Revisar FK de `cliente_blocos.cliente_id -> clientes.id`.
+- [ ] Revisar FK de `financeiro_entradas.cliente_id -> clientes.id`.
+- [ ] Revisar FK de `financeiro_saidas.fixo_id -> financeiro_fixos.id`.
+- [ ] Revisar FK de `oportunidades.cliente_id -> clientes.id`.
+- [ ] Revisar FK de `oportunidades.funil_estagio_id -> funil_estagios.id`.
+- [ ] Revisar FK de `oportunidades.projeto_id -> projetos.id`.
+- [ ] Revisar FK de `orcamento_itens.orcamento_id -> orcamentos.id`.
+- [ ] Revisar FK de `projetos.cliente_id -> clientes.id`.
+- [ ] Revisar FK de `projeto_tarefas.projeto_id -> projetos.id`.
+- [ ] Adicionar FK faltante de `orcamentos.cliente_id -> clientes.id`, se não existir no ambiente real.
+
+---
+
+## Bloco 4 - Ajustes de collation e engine
+
+- [ ] Confirmar `ENGINE=InnoDB` em todas as tabelas do core.
+- [ ] Padronizar tabelas legadas que ainda estiverem fora de `utf8mb4`.
+- [ ] Padronizar collation preferencial para `utf8mb4_unicode_ci`.
+
+---
+
+## Bloco 5 - Ajustes de regras e índices
+
+- [ ] Revisar `clientes.email` como `UNIQUE` global antes da futura troca para `UNIQUE (workspace_id, email)`.
+- [ ] Revisar `funil_estagios.slug` como `UNIQUE` global antes da futura troca para `UNIQUE (workspace_id, slug)`.
+- [ ] Revisar índices em colunas muito usadas nas listagens do dashboard e módulos.
+- [ ] Validar que não há conflito de tipos nas futuras tabelas SaaS.
+
+---
+
+## Bloco 6 - Preparacao para a Fase 2
+
+- [ ] Confirmar que `usuarios.id` já está compatível com `workspace_members.user_id`.
+- [ ] Confirmar que o schema está pronto para receber tabelas novas com `BIGINT UNSIGNED` apenas onde fizer sentido.
+- [ ] Definir a estratégia final: legado operacional continua em `INT UNSIGNED`, fundação SaaS em `BIGINT UNSIGNED`.
+- [ ] Validar que a pré-migração estrutural terminou sem quebrar o sistema atual.
+
+---
+
+## Fechamento
+
+- [ ] Banco padronizado o suficiente para iniciar a migração multi-tenant.
+- [ ] Menor risco de erro de FK na criação de `workspace_members` e tabelas futuras.
+- [ ] Base pronta para rodar a migração `001_fase2_multi_tenant_base.sql`.

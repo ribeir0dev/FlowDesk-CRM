@@ -8,7 +8,10 @@ if (session_status() !== PHP_SESSION_ACTIVE) {
     session_start();
 }
 
-require_once __DIR__ . '/../../config/db.php';
+if (!isset($pdo) || !($pdo instanceof PDO)) {
+    require __DIR__ . '/../../config/db.php';
+}
+require_once __DIR__ . '/../../app/Helpers/auth.php';
 require_once __DIR__ . '/../../app/Models/OportunidadeModel.php';
 
 $model = new OportunidadeModel($pdo);
@@ -47,10 +50,8 @@ switch ($acao) {
         excluirOportunidade($model);
         break;
 
-
     default:
-        // aqui você pode incluir a view pipeline.php
-        require __DIR__ . '/../../modules/pipeline.php';
+        header('Location: /pipeline');
         exit;
 }
 
@@ -102,6 +103,11 @@ function moverOportunidade(OportunidadeModel $model): void
     }
 
     $ok = $model->moverEstagio($id, $novoEstagio);
+    if ($ok) {
+        fd_audit_log('pipeline.move', 'oportunidade', $id, [
+            'funil_estagio_id' => $novoEstagio,
+        ]);
+    }
     echo json_encode(['ok' => $ok]);
     exit;
 }
@@ -114,7 +120,13 @@ function criarOportunidade(OportunidadeModel $model): void
     }
 
     $id = $model->criar($_POST);
-    header('Location: /modules/painel.php?mod=pipeline&ok=1');
+    if ($id > 0) {
+        fd_audit_log('pipeline.create', 'oportunidade', $id, [
+            'titulo' => trim((string) ($_POST['titulo'] ?? '')),
+            'cliente_id' => (int) ($_POST['cliente_id'] ?? 0),
+        ]);
+    }
+    header('Location: /pipeline' . ($id > 0 ? '?ok=1' : '?erro=1'));
     exit;
 }
 
@@ -127,12 +139,17 @@ function atualizarOportunidade(OportunidadeModel $model): void
 
     $id = (int) ($_POST['id'] ?? 0);
     if ($id <= 0) {
-        header('Location: /modules/painel.php?mod=pipeline&erro=1');
+        header('Location: /pipeline?erro=1');
         exit;
     }
 
-    $model->atualizar($id, $_POST);
-    header('Location: /modules/painel.php?mod=pipeline&ok=1');
+    $ok = $model->atualizar($id, $_POST);
+    if ($ok) {
+        fd_audit_log('pipeline.update', 'oportunidade', $id, [
+            'titulo' => trim((string) ($_POST['titulo'] ?? '')),
+        ]);
+    }
+    header('Location: /pipeline' . ($ok ? '?ok=1' : '?erro=1'));
     exit;
 }
 
@@ -147,9 +164,16 @@ function marcarGanha(OportunidadeModel $model): void
     $ganhoId = (int) ($_POST['estagio_ganho_id'] ?? 0);
 
     if ($id && $ganhoId) {
-        $model->marcarGanha($id, $ganhoId);
+        $ok = $model->marcarGanha($id, $ganhoId);
+        if ($ok) {
+            fd_audit_log('pipeline.mark_won', 'oportunidade', $id, [
+                'funil_estagio_id' => $ganhoId,
+            ]);
+        }
+        header('Location: /pipeline' . ($ok ? '?ok=1' : '?erro=1'));
+        exit;
     }
-    header('Location: /modules/painel.php?mod=pipeline');
+    header('Location: /pipeline?erro=1');
     exit;
 }
 
@@ -165,11 +189,20 @@ function marcarPerdida(OportunidadeModel $model): void
     $motivo = trim($_POST['motivo_perda'] ?? '');
 
     if ($id && $perdidoId) {
-        $model->marcarPerdida($id, $perdidoId, $motivo);
+        $ok = $model->marcarPerdida($id, $perdidoId, $motivo);
+        if ($ok) {
+            fd_audit_log('pipeline.mark_lost', 'oportunidade', $id, [
+                'funil_estagio_id' => $perdidoId,
+                'motivo_perda' => $motivo,
+            ]);
+        }
+        header('Location: /pipeline' . ($ok ? '?ok=1' : '?erro=1'));
+        exit;
     }
-    header('Location: /modules/painel.php?mod=pipeline');
+    header('Location: /pipeline?erro=1');
     exit;
 }
+
 function buscarOportunidade(OportunidadeModel $model): void
 {
     $id = (int) ($_GET['id'] ?? 0);
@@ -198,7 +231,10 @@ function excluirOportunidade(OportunidadeModel $model): void
         exit;
     }
 
-    $model->excluir($id); // crie este método no model
-    header('Location: /modules/painel.php?mod=pipeline');
+    $ok = $model->excluir($id);
+    if ($ok) {
+        fd_audit_log('pipeline.delete', 'oportunidade', $id);
+    }
+    header('Location: /pipeline' . ($ok ? '?ok=1' : '?erro=1'));
     exit;
 }

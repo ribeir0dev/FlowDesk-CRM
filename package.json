@@ -1,0 +1,27 @@
+{
+  "name": "flowdesk-crm",
+  "version": "1.0.0",
+  "description": "CRM de gestão para freelancers",
+  "main": "index.js",
+  "private": true,
+  "scripts": {
+    "dev": "tailwindcss -i ./resources/css/app.css -o ./public/assets/css/app.css --watch",
+    "build": "tailwindcss -i ./resources/css/app.css -o ./public/assets/css/app.css --minify"
+  },
+
+  "author": "Reinaldo Ribeiro",
+  "license": "ISC",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ribeir0dev/FlowDesk-CRM.git"
+  },
+  "keywords": [],
+  "bugs": {
+    "url": "https://github.com/ribeir0dev/FlowDesk-CRM/issues"
+  },
+  "homepage": "https://github.com/ribeir0dev/FlowDesk-CRM#readme",
+  "devDependencies": {
+    "@tailwindcss/cli": "^4.0.0",
+    "tailwindcss": "^4.0.0"
+  }
+}

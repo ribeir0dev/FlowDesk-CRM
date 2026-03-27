@@ -5,13 +5,15 @@ if (session_status() !== PHP_SESSION_ACTIVE) {
     session_start();
 }
 
-require_once __DIR__ . '/../../config/db.php';
-require_once __DIR__ . '/../../inc/functions/auth.php';
+if (!isset($pdo) || !($pdo instanceof PDO)) {
+    require __DIR__ . '/../../config/db.php';
+}
+require_once __DIR__ . '/../Helpers/auth.php';
 require_once __DIR__ . '/../../app/Models/ClienteModel.php';
 
 $clienteModel = new ClienteModel($pdo);
 
-$acao = $_GET['acao'] ?? $_POST['acao'] ?? '';
+$acao = $_REQUEST['acao'] ?? '';
 
 switch ($acao) {
     case 'criar':
@@ -30,8 +32,12 @@ switch ($acao) {
         buscarBlocoCliente($clienteModel);
         break;
 
+    case 'salvar_bloco':
+        salvarBlocoCliente($pdo);
+        break;
+
     default:
-        header('Location: /modules/painel.php?mod=clientes');
+        header('Location: /clientes');
         exit;
 }
 
@@ -41,7 +47,7 @@ switch ($acao) {
 function criarCliente(ClienteModel $clienteModel): void
 {
     if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-        header('Location: /modules/painel.php?mod=clientes');
+        header('Location: /clientes');
         exit;
     }
 
@@ -53,19 +59,13 @@ function criarCliente(ClienteModel $clienteModel): void
     $obs      = trim($_POST['observacoes'] ?? '');
 
     if ($nome === '' || $whatsapp === '' || $email === '') {
-        header('Location: /modules/painel.php?mod=clientes&erro=1');
+        header('Location: /clientes?erro=1');
         exit;
-    }
-
-    if (!function_exists('gerarTokenPublico')) {
-        function gerarTokenPublico($length = 64) {
-            return bin2hex(random_bytes($length / 2));
-        }
     }
 
     $token_publico = gerarTokenPublico(64);
 
-    $clienteModel->criar([
+    $clienteId = $clienteModel->criar([
         'nome'          => $nome,
         'whatsapp'      => $whatsapp,
         'email'         => $email,
@@ -75,7 +75,15 @@ function criarCliente(ClienteModel $clienteModel): void
         'token_publico' => $token_publico,
     ]);
 
-    header('Location: /modules/painel.php?mod=clientes&ok=1');
+    if ($clienteId > 0) {
+        fd_audit_log('cliente.create', 'cliente', $clienteId, [
+            'nome' => $nome,
+            'email' => $email,
+            'status' => $status,
+        ]);
+    }
+
+    header('Location: /clientes?ok=1');
     exit;
 }
 
@@ -85,7 +93,7 @@ function criarCliente(ClienteModel $clienteModel): void
 function atualizarCliente(ClienteModel $clienteModel): void
 {
     if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-        header('Location: /modules/painel.php?mod=clientes');
+        header('Location: /clientes');
         exit;
     }
 
@@ -98,11 +106,11 @@ function atualizarCliente(ClienteModel $clienteModel): void
     $obs      = trim($_POST['observacoes'] ?? '');
 
     if ($id <= 0 || $nome === '' || $whatsapp === '' || $email === '') {
-        header('Location: /modules/painel.php?mod=cliente&id=' . $id . '&erro=1');
+        header('Location: /cliente?id=' . $id . '&erro=1');
         exit;
     }
 
-    $clienteModel->atualizar($id, [
+    $ok = $clienteModel->atualizar($id, [
         'nome'        => $nome,
         'whatsapp'    => $whatsapp,
         'email'       => $email,
@@ -111,7 +119,15 @@ function atualizarCliente(ClienteModel $clienteModel): void
         'observacoes' => $obs,
     ]);
 
-    header('Location: /modules/painel.php?mod=cliente&id=' . $id . '&ok=1');
+    if ($ok) {
+        fd_audit_log('cliente.update', 'cliente', $id, [
+            'nome' => $nome,
+            'email' => $email,
+            'status' => $status,
+        ]);
+    }
+
+    header('Location: /cliente?id=' . $id . ($ok ? '&ok=1' : '&erro=1'));
     exit;
 }
 
@@ -121,14 +137,14 @@ function atualizarCliente(ClienteModel $clienteModel): void
 function uploadFotoCliente(ClienteModel $clienteModel): void
 {
     if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-        header('Location: /modules/painel.php?mod=clientes');
+        header('Location: /clientes');
         exit;
     }
 
     $cliente_id = isset($_POST['cliente_id']) ? (int)$_POST['cliente_id'] : 0;
 
     if ($cliente_id <= 0 || empty($_FILES['foto']['name'])) {
-        header('Location: /modules/painel.php?mod=cliente&id=' . $cliente_id);
+        header('Location: /cliente?id=' . $cliente_id);
         exit;
     }
 
@@ -136,11 +152,11 @@ function uploadFotoCliente(ClienteModel $clienteModel): void
     $ext = strtolower(pathinfo($_FILES['foto']['name'], PATHINFO_EXTENSION));
 
     if (!in_array($ext, $ext_permitidas) || $_FILES['foto']['error'] !== UPLOAD_ERR_OK) {
-        header('Location: /modules/painel.php?mod=cliente&id=' . $cliente_id . '&foto=erro');
+        header('Location: /cliente?id=' . $cliente_id . '&foto=erro');
         exit;
     }
 
-    $baseDir = __DIR__ . '/../../uploads/clientes/';
+    $baseDir = __DIR__ . '/../../public/uploads/clientes/';
     if (!is_dir($baseDir)) {
         mkdir($baseDir, 0775, true);
     }
@@ -150,10 +166,16 @@ function uploadFotoCliente(ClienteModel $clienteModel): void
 
     if (move_uploaded_file($_FILES['foto']['tmp_name'], $destino)) {
         $caminho_db = '/uploads/clientes/' . $nome_arquivo;
-        $clienteModel->salvarFotoPerfil($cliente_id, $caminho_db);
+        if ($clienteModel->salvarFotoPerfil($cliente_id, $caminho_db)) {
+            fd_audit_log('cliente.photo_upload', 'cliente', $cliente_id, [
+                'foto' => $caminho_db,
+            ]);
+            header('Location: /cliente?id=' . $cliente_id . '&foto=ok');
+            exit;
+        }
     }
 
-    header('Location: /modules/painel.php?mod=cliente&id=' . $cliente_id);
+    header('Location: /cliente?id=' . $cliente_id . '&foto=erro');
     exit;
 }
 
@@ -175,5 +197,60 @@ function buscarBlocoCliente(ClienteModel $clienteModel): void
     $bloco = $clienteModel->buscarBloco($cliente_id, $slug);
 
     echo json_encode($bloco ?: null);
+    exit;
+}
+
+function salvarBlocoCliente(PDO $pdo): void
+{
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+        header('Location: /clientes');
+        exit;
+    }
+
+    $workspaceId = fd_current_workspace_id() ?? 0;
+    if ($workspaceId <= 0) {
+        header('Location: /clientes?erro=1');
+        exit;
+    }
+
+    $cliente_id = (int) ($_POST['cliente_id'] ?? 0);
+    $slug = trim($_POST['slug'] ?? '');
+    $titulo = trim($_POST['titulo'] ?? '');
+    $compartilhado = isset($_POST['compartilhado']) ? 1 : 0;
+
+    $payload = [];
+
+    if ($slug === 'website') {
+        $payload['url'] = trim($_POST['url'] ?? '');
+    } elseif (in_array($slug, ['hospedagem', 'acesso_site', 'registro_br'], true)) {
+        $payload['url'] = trim($_POST['url'] ?? '');
+        $payload['usuario'] = trim($_POST['usuario'] ?? '');
+        $payload['senha'] = trim($_POST['senha'] ?? '');
+    } else {
+        $payload['livre'] = trim($_POST['conteudo_livre'] ?? '');
+    }
+
+    $conteudoJson = json_encode($payload, JSON_UNESCAPED_UNICODE);
+
+    $stmt = $pdo->prepare("
+        INSERT INTO cliente_blocos (workspace_id, cliente_id, slug, titulo, conteudo, compartilhado, atualizado_em)
+        VALUES (?, ?, ?, ?, ?, ?, NOW())
+        ON DUPLICATE KEY UPDATE
+            titulo = VALUES(titulo),
+            conteudo = VALUES(conteudo),
+            compartilhado = VALUES(compartilhado),
+            atualizado_em = NOW()
+    ");
+    $ok = $stmt->execute([$workspaceId, $cliente_id, $slug, $titulo, $conteudoJson, $compartilhado]);
+
+    if ($ok) {
+        fd_audit_log('cliente.bloco.save', 'cliente_bloco', $cliente_id, [
+            'slug' => $slug,
+            'titulo' => $titulo,
+            'compartilhado' => $compartilhado,
+        ]);
+    }
+
+    header('Location: /cliente?id=' . $cliente_id . ($ok ? '&ok_bloco=1' : '&erro=1'));
     exit;
 }

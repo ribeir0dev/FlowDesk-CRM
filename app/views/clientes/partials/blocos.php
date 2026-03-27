@@ -1,0 +1,20 @@
+{
+  "website": {
+    "url": "https://www.site-do-cliente.com"
+  },
+  "hospedagem": {
+    "url": "https://painel.hospedagem.com",
+    "usuario": "usuario_hospedagem",
+    "senha": "senha_hospedagem"
+  },
+  "acesso_site": {
+    "url": "https://www.site-do-cliente.com/wp-admin",
+    "usuario": "usuario_site",
+    "senha": "senha_site"
+  },
+  "registro_br": {
+    "url": "https://registro.br",
+    "usuario": "email@cliente.com",
+    "senha": "senha_registro"
+  }
+}

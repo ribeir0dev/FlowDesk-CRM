@@ -1,9 +1,9 @@
 <?php
 // db.php — conexão segura
 $db_host = "localhost";
-$db_name = "u710601266_flowdesk";
-$db_user = "u710601266_contatoreinald";
-$db_pass = "@001TIscml$";
+$db_name = "db_flowdesk";
+$db_user = "root";
+$db_pass = "root";
 $dsn = "mysql:host=$db_host;dbname=$db_name;charset=utf8mb4";
 
 //try {

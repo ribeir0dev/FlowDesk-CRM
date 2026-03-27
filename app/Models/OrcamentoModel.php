@@ -5,190 +5,274 @@ require_once __DIR__ . '/../../config/db.php';
 
 class OrcamentoModel
 {
-  private PDO $pdo;
+    private PDO $pdo;
+    private int $workspaceId;
+    private ?int $viewerClienteId;
 
-  public function __construct(PDO $pdo)
-  {
-    $this->pdo = $pdo;
-  }
-
-  /**
-   * Lista orçamentos com nome do cliente
-   */
-public function listarComClientes(array $statusList = ['todos']): array
-{
-    $sql = "
-        SELECT
-          o.id,
-          o.codigo,
-          c.nome AS cliente_nome,
-          o.servico_principal,
-          o.forma_pagamento,
-          o.status,
-          o.valor_total
-        FROM orcamentos o
-        JOIN clientes c ON c.id = o.cliente_id
-        WHERE 1=1
-    ";
-    $params = [];
-
-    // Se não tiver "todos", filtra pelos status marcados
-    if (!in_array('todos', $statusList, true)) {
-        $placeholders = implode(',', array_fill(0, count($statusList), '?'));
-        $sql .= " AND o.status IN ($placeholders)";
-        $params = array_merge($params, $statusList);
+    public function __construct(PDO $pdo)
+    {
+        $this->pdo = $pdo;
+        $this->workspaceId = fd_current_workspace_id() ?? 0;
+        $this->viewerClienteId = fd_current_cliente_id();
     }
 
-    $sql .= " ORDER BY o.id DESC";
-
-    $stmt = $this->pdo->prepare($sql);
-    $stmt->execute($params);
-    return $stmt->fetchAll(PDO::FETCH_ASSOC);
-}
-
-  /**
-   * Lista todos os clientes para popular o select do modal
-   */
-  public function listarClientes(): array
-  {
-    $sql = "
-          SELECT id, nome, telefone
-          FROM clientes
-          ORDER BY nome ASC
-        ";
-    $stmt = $this->pdo->query($sql);
-    return $stmt->fetchAll(PDO::FETCH_ASSOC);
-  }
-
-  
-
-  /**
-   * Cria um novo orçamento
-   */
-  public function criar(
-    int $clienteId,
-    string $servicoPrincipal,
-    string $descricaoServico,
-    string $formaPagamento,
-    string $status,
-    float $valorTotal,
-    array $itens
-  ): int {
-    $this->pdo->beginTransaction();
-
-    // gera um código simples tipo 0058 (você pode mudar a lógica)
-    $stmt = $this->pdo->query('SELECT IFNULL(MAX(id),0) + 1 AS prox FROM orcamentos');
-    $proxId = (int) $stmt->fetchColumn();
-    $codigo = str_pad((string) $proxId, 4, '0', STR_PAD_LEFT);
-
-    $sql = "
-          INSERT INTO orcamentos
-            (codigo, cliente_id, servico_principal, descricao_servico,
-             forma_pagamento, status, valor_total, criado_em)
-          VALUES
-            (:codigo, :cliente_id, :servico_principal, :descricao_servico,
-             :forma_pagamento, :status, :valor_total, NOW())
-        ";
-    $stmt = $this->pdo->prepare($sql);
-    $stmt->execute([
-      ':codigo' => $codigo,
-      ':cliente_id' => $clienteId,
-      ':servico_principal' => $servicoPrincipal,
-      ':descricao_servico' => $descricaoServico,
-      ':forma_pagamento' => $formaPagamento,
-      ':status' => $status,
-      ':valor_total' => $valorTotal,
-    ]);
-
-    $orcamentoId = (int) $this->pdo->lastInsertId();
-
-    // itens (tabela orcamento_itens)
-    if (!empty($itens)) {
-      $sqlItem = "
-              INSERT INTO orcamento_itens
-                (orcamento_id, descricao, valor)
-              VALUES
-                (:orcamento_id, :descricao, :valor)
-            ";
-      $stmtItem = $this->pdo->prepare($sqlItem);
-
-      foreach ($itens as $item) {
-        $descricao = trim($item['descricao'] ?? '');
-        $valor = (float) str_replace(',', '.', preg_replace('/\./', '', $item['valor'] ?? '0'));
-
-        // permite zero, bloqueia só negativo
-        if ($descricao === '' || $valor < 0) {
-          continue;
+    private function currentWorkspaceId(): int
+    {
+        if ($this->workspaceId <= 0) {
+            throw new RuntimeException('Workspace atual nao definido para orcamentos.');
         }
 
-        $stmtItem->execute([
-          ':orcamento_id' => $orcamentoId,
-          ':descricao' => $descricao,
-          ':valor' => $valor,
-        ]);
-      }
+        return $this->workspaceId;
     }
 
-    $this->pdo->commit();
+    private function viewerClienteId(): ?int
+    {
+        return fd_current_workspace_role() === 'viewer' ? $this->viewerClienteId : null;
+    }
 
-    return $orcamentoId;
-  }
+    private function viewerHasLinkedClient(): bool
+    {
+        return fd_current_workspace_role() !== 'viewer' || $this->viewerClienteId() !== null;
+    }
 
-  /**
-   * Excluir orçamento (e itens)
-   */
-  public function excluir(int $id): bool
-  {
-    $this->pdo->beginTransaction();
+    public function listarComClientes(array $statusList = ['todos']): array
+    {
+        if (!$this->viewerHasLinkedClient()) {
+            return [];
+        }
 
-    $stmtItens = $this->pdo->prepare('DELETE FROM orcamento_itens WHERE orcamento_id = ?');
-    $stmtItens->execute([$id]);
+        $sql = "
+            SELECT
+              o.id,
+              o.codigo,
+              o.cliente_id,
+              c.nome AS cliente_nome,
+              o.servico_principal,
+              o.descricao_servico,
+              o.forma_pagamento,
+              o.status,
+              o.valor_total
+            FROM orcamentos o
+            JOIN clientes c ON c.id = o.cliente_id
+            WHERE o.workspace_id = ?
+              AND c.workspace_id = ?
+        ";
+        $workspaceId = $this->currentWorkspaceId();
+        $params = [$workspaceId, $workspaceId];
 
-    $stmt = $this->pdo->prepare('DELETE FROM orcamentos WHERE id = ?');
-    $ok = $stmt->execute([$id]);
+        if ($this->viewerClienteId() !== null) {
+            $sql .= " AND o.cliente_id = ?";
+            $params[] = $this->viewerClienteId();
+        }
 
-    $this->pdo->commit();
+        if (!in_array('todos', $statusList, true)) {
+            $placeholders = implode(',', array_fill(0, count($statusList), '?'));
+            $sql .= " AND o.status IN ($placeholders)";
+            $params = array_merge($params, $statusList);
+        }
 
-    return $ok;
-  }
+        $sql .= " ORDER BY o.id DESC";
 
-  public function buscarPorId(int $id): ?array
-  {
-    $sql = "
-      SELECT
-        o.id,
-        o.codigo,
-        o.cliente_id,
-        o.servico_principal,
-        o.descricao_servico,
-        o.forma_pagamento,
-        o.status,
-        o.valor_total
-      FROM orcamentos o
-      WHERE o.id = ?
-      LIMIT 1
-    ";
-    $stmt = $this->pdo->prepare($sql);
-    $stmt->execute([$id]);
-    $orc = $stmt->fetch(PDO::FETCH_ASSOC);
+        $stmt = $this->pdo->prepare($sql);
+        $stmt->execute($params);
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
 
-    return $orc ?: null;
-  }
+    public function listarClientes(): array
+    {
+        if (!$this->viewerHasLinkedClient()) {
+            return [];
+        }
 
-  public function buscarItens(int $orcamentoId): array
-  {
-    $sql = "
-      SELECT id, descricao, valor
-      FROM orcamento_itens
-      WHERE orcamento_id = ?
-      ORDER BY id ASC
-    ";
-    $stmt = $this->pdo->prepare($sql);
-    $stmt->execute([$orcamentoId]);
-    return $stmt->fetchAll(PDO::FETCH_ASSOC);
-  }
+        $sql = "
+            SELECT id, nome, whatsapp
+            FROM clientes
+            WHERE workspace_id = ?
+            ORDER BY nome ASC
+        ";
+        $stmt = $this->pdo->prepare($sql);
+        $stmt->execute([$this->currentWorkspaceId()]);
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
 
+    public function criar(
+        int $clienteId,
+        string $servicoPrincipal,
+        string $descricaoServico,
+        string $formaPagamento,
+        string $status,
+        float $valorTotal,
+        array $itens
+    ): int {
+        $this->pdo->beginTransaction();
 
+        $stmt = $this->pdo->prepare('SELECT IFNULL(MAX(id),0) + 1 AS prox FROM orcamentos WHERE workspace_id = ?');
+        $stmt->execute([$this->currentWorkspaceId()]);
+        $proxId = (int) $stmt->fetchColumn();
+        $codigo = str_pad((string) $proxId, 4, '0', STR_PAD_LEFT);
+
+        $sql = "
+            INSERT INTO orcamentos
+                (workspace_id, codigo, cliente_id, servico_principal, descricao_servico,
+                 forma_pagamento, status, valor_total, criado_em)
+            VALUES
+                (:workspace_id, :codigo, :cliente_id, :servico_principal, :descricao_servico,
+                 :forma_pagamento, :status, :valor_total, NOW())
+        ";
+        $stmt = $this->pdo->prepare($sql);
+        $stmt->execute([
+            ':workspace_id' => $this->currentWorkspaceId(),
+            ':codigo' => $codigo,
+            ':cliente_id' => $clienteId,
+            ':servico_principal' => $servicoPrincipal,
+            ':descricao_servico' => $descricaoServico,
+            ':forma_pagamento' => $formaPagamento,
+            ':status' => $status,
+            ':valor_total' => $valorTotal,
+        ]);
+
+        $orcamentoId = (int) $this->pdo->lastInsertId();
+        $this->salvarItens($orcamentoId, $itens);
+
+        $this->pdo->commit();
+
+        return $orcamentoId;
+    }
+
+    public function atualizar(
+        int $id,
+        int $clienteId,
+        string $servicoPrincipal,
+        string $descricaoServico,
+        string $formaPagamento,
+        string $status,
+        float $valorTotal,
+        array $itens
+    ): bool {
+        $this->pdo->beginTransaction();
+
+        $sql = "
+            UPDATE orcamentos
+            SET cliente_id = :cliente_id,
+                servico_principal = :servico_principal,
+                descricao_servico = :descricao_servico,
+                forma_pagamento = :forma_pagamento,
+                status = :status,
+                valor_total = :valor_total
+            WHERE id = :id
+              AND workspace_id = :workspace_id
+        ";
+        $stmt = $this->pdo->prepare($sql);
+        $ok = $stmt->execute([
+            ':id' => $id,
+            ':workspace_id' => $this->currentWorkspaceId(),
+            ':cliente_id' => $clienteId,
+            ':servico_principal' => $servicoPrincipal,
+            ':descricao_servico' => $descricaoServico,
+            ':forma_pagamento' => $formaPagamento,
+            ':status' => $status,
+            ':valor_total' => $valorTotal,
+        ]);
+
+        $stmtItens = $this->pdo->prepare('DELETE FROM orcamento_itens WHERE orcamento_id = ? AND workspace_id = ?');
+        $stmtItens->execute([$id, $this->currentWorkspaceId()]);
+        $this->salvarItens($id, $itens);
+
+        $this->pdo->commit();
+
+        return $ok;
+    }
+
+    public function excluir(int $id): bool
+    {
+        $this->pdo->beginTransaction();
+
+        $stmtItens = $this->pdo->prepare('DELETE FROM orcamento_itens WHERE orcamento_id = ? AND workspace_id = ?');
+        $stmtItens->execute([$id, $this->currentWorkspaceId()]);
+
+        $stmt = $this->pdo->prepare('DELETE FROM orcamentos WHERE id = ? AND workspace_id = ?');
+        $ok = $stmt->execute([$id, $this->currentWorkspaceId()]);
+
+        $this->pdo->commit();
+
+        return $ok;
+    }
+
+    public function buscarPorId(int $id): ?array
+    {
+        if (!$this->viewerHasLinkedClient()) {
+            return null;
+        }
+
+        $sql = "
+            SELECT
+              o.id,
+              o.codigo,
+              o.cliente_id,
+              o.servico_principal,
+              o.descricao_servico,
+              o.forma_pagamento,
+              o.status,
+              o.valor_total
+            FROM orcamentos o
+            WHERE o.id = ? AND o.workspace_id = ?
+        ";
+        $params = [$id, $this->currentWorkspaceId()];
+        if ($this->viewerClienteId() !== null) {
+            $sql .= " AND o.cliente_id = ?";
+            $params[] = $this->viewerClienteId();
+        }
+        $sql .= " LIMIT 1";
+        $stmt = $this->pdo->prepare($sql);
+        $stmt->execute($params);
+        $orcamento = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        return $orcamento ?: null;
+    }
+
+    public function buscarItens(int $orcamentoId): array
+    {
+        if (!$this->viewerHasLinkedClient()) {
+            return [];
+        }
+
+        $sql = "
+            SELECT id, descricao, valor
+            FROM orcamento_itens
+            WHERE orcamento_id = ? AND workspace_id = ?
+            ORDER BY id ASC
+        ";
+        $stmt = $this->pdo->prepare($sql);
+        $stmt->execute([$orcamentoId, $this->currentWorkspaceId()]);
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    private function salvarItens(int $orcamentoId, array $itens): void
+    {
+        if (empty($itens)) {
+            return;
+        }
+
+        $sql = "
+            INSERT INTO orcamento_itens (workspace_id, orcamento_id, descricao, valor)
+            VALUES (:workspace_id, :orcamento_id, :descricao, :valor)
+        ";
+        $stmt = $this->pdo->prepare($sql);
+
+        foreach ($itens as $item) {
+            $descricao = trim($item['descricao'] ?? '');
+            $valor = (float) str_replace(',', '.', preg_replace('/\./', '', $item['valor'] ?? '0'));
+
+            if ($descricao === '' || $valor < 0) {
+                continue;
+            }
+
+            $stmt->execute([
+                ':workspace_id' => $this->currentWorkspaceId(),
+                ':orcamento_id' => $orcamentoId,
+                ':descricao' => $descricao,
+                ':valor' => $valor,
+            ]);
+        }
+    }
 }
-
-

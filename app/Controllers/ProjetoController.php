@@ -5,12 +5,15 @@ if (session_status() !== PHP_SESSION_ACTIVE) {
     session_start();
 }
 
-require_once __DIR__ . '/../../config/db.php';
+if (!isset($pdo) || !($pdo instanceof PDO)) {
+    require __DIR__ . '/../../config/db.php';
+}
+require_once __DIR__ . '/../../app/Helpers/auth.php';
 require_once __DIR__ . '/../../app/Models/ProjetoModel.php';
 
 $projetoModel = new ProjetoModel($pdo);
 
-$acao = $_GET['acao'] ?? $_POST['acao'] ?? '';
+$acao = $_REQUEST['acao'] ?? '';
 
 switch ($acao) {
     case 'criar':
@@ -36,17 +39,17 @@ switch ($acao) {
     case 'excluirTarefa':
         excluirTarefa($projetoModel);
         break;
-    
+
     case 'atualizarProjeto':
-    atualizarProjeto($projetoModel);
-    break;
+        atualizarProjeto($projetoModel);
+        break;
 
     case 'getProjeto':
-    getProjeto($projetoModel);
-    break;
+        getProjeto($projetoModel);
+        break;
 
     default:
-        header('Location: /modules/painel.php?mod=projetos');
+        header('Location: /projetos');
         exit;
 }
 
@@ -55,7 +58,7 @@ switch ($acao) {
 function criarProjeto(ProjetoModel $model): void
 {
     if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-        header('Location: /modules/painel.php?mod=projetos');
+        header('Location: /projetos');
         exit;
     }
 
@@ -64,20 +67,18 @@ function criarProjeto(ProjetoModel $model): void
     $cliente_id   = isset($_POST['cliente_id']) && $_POST['cliente_id'] !== ''
         ? (int)$_POST['cliente_id']
         : null;
-    $data_inicio  = $_POST['data_inicio']  ?: null;
+    $data_inicio  = $_POST['data_inicio'] ?: null;
     $data_entrega = $_POST['data_entrega'] ?: null;
-    $status       = $_POST['status']       ?? 'planejado';
+    $status       = $_POST['status'] ?? 'planejado';
     $descricao    = trim($_POST['descricao'] ?? '');
 
-    // novo: vindo do funil
     $oportunidade_id = (int)($_POST['oportunidade_id'] ?? 0);
 
     if ($nome_projeto === '') {
-        header('Location: /modules/painel.php?mod=projetos&erro=1');
+        header('Location: /projetos?erro=1');
         exit;
     }
 
-    // cria projeto normalmente
     $novoId = $model->criarProjeto([
         'cliente_id'   => $cliente_id,
         'nome_projeto' => $nome_projeto,
@@ -88,35 +89,43 @@ function criarProjeto(ProjetoModel $model): void
         'status'       => $status,
     ]);
 
-    // se veio de uma oportunidade, vincula
-    if ($oportunidade_id > 0 && $novoId) {
+    if ($oportunidade_id > 0 && $novoId > 0) {
         require_once __DIR__ . '/../Models/OportunidadeModel.php';
-        $opModel = new OportunidadeModel($GLOBALS['pdo']); // reaproveita o mesmo PDO
+        $opModel = new OportunidadeModel($GLOBALS['pdo']);
         $opModel->vincularProjeto($oportunidade_id, (int)$novoId);
     }
 
-    header('Location: /modules/painel.php?mod=projetos&ok=1');
+    if ($novoId > 0) {
+        fd_audit_log('projeto.create', 'projeto', (int) $novoId, [
+            'nome_projeto' => $nome_projeto,
+            'cliente_id' => $cliente_id,
+        ]);
+    }
+
+    header('Location: /projetos' . ($novoId > 0 ? '?criado=1' : '?erro=1'));
     exit;
 }
-
 
 function concluirProjeto(ProjetoModel $model): void
 {
     if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-        header('Location: /modules/painel.php?mod=projetos');
+        header('Location: /projetos');
         exit;
     }
 
     $projeto_id = (int)($_POST['projeto_id'] ?? 0);
 
     if ($projeto_id <= 0) {
-        header('Location: /modules/painel.php?mod=projetos&erro=1');
+        header('Location: /projetos?erro=1');
         exit;
     }
 
-    $model->excluirProjeto($projeto_id);
+    $ok = $model->excluirProjeto($projeto_id);
+    if ($ok) {
+        fd_audit_log('projeto.complete', 'projeto', $projeto_id);
+    }
 
-    header('Location: /modules/painel.php?mod=projetos&concluido=1');
+    header('Location: /projetos' . ($ok ? '?concluido=1' : '?erro=1'));
     exit;
 }
 
@@ -140,23 +149,23 @@ function carregarTarefa(ProjetoModel $model): void
 function salvarTarefa(ProjetoModel $model): void
 {
     if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-        header('Location: /modules/painel.php?mod=projetos');
+        header('Location: /projetos');
         exit;
     }
 
-    $projeto_id  = (int)($_POST['projeto_id'] ?? 0);
-    $tarefa_id   = (int)($_POST['tarefa_id'] ?? 0);
-    $titulo      = trim($_POST['titulo'] ?? '');
-    $descricao   = trim($_POST['descricao'] ?? '');
-    $coluna      = $_POST['coluna'] ?? 'backlog';
+    $projeto_id   = (int)($_POST['projeto_id'] ?? 0);
+    $tarefa_id    = (int)($_POST['tarefa_id'] ?? 0);
+    $titulo       = trim($_POST['titulo'] ?? '');
+    $descricao    = trim($_POST['descricao'] ?? '');
+    $coluna       = $_POST['coluna'] ?? 'backlog';
     $data_entrega = $_POST['data_entrega'] ?: null;
 
     if ($projeto_id <= 0 || $titulo === '') {
-        header('Location: /modules/painel.php?mod=projeto_detalhe&id=' . $projeto_id . '&erro_tarefa=1');
+        header('Location: /projeto?id=' . $projeto_id . '&erro_tarefa=1');
         exit;
     }
 
-    $model->salvarTarefa([
+    $ok = $model->salvarTarefa([
         'projeto_id'   => $projeto_id,
         'tarefa_id'    => $tarefa_id,
         'titulo'       => $titulo,
@@ -165,7 +174,15 @@ function salvarTarefa(ProjetoModel $model): void
         'data_entrega' => $data_entrega,
     ]);
 
-    header('Location: /modules/painel.php?mod=projeto_detalhe&id=' . $projeto_id);
+    if ($ok) {
+        fd_audit_log($tarefa_id > 0 ? 'projeto.task.update' : 'projeto.task.create', 'projeto_tarefa', $tarefa_id > 0 ? $tarefa_id : null, [
+            'projeto_id' => $projeto_id,
+            'titulo' => $titulo,
+            'coluna' => $coluna,
+        ]);
+    }
+
+    header('Location: /projeto?id=' . $projeto_id . ($ok ? '&ok_tarefa=1' : '&erro_tarefa=1'));
     exit;
 }
 
@@ -185,51 +202,83 @@ function moverTarefa(ProjetoModel $model): void
         exit;
     }
 
-    $model->moverTarefa($tarefa_id, $coluna);
-    http_response_code(204);
+    if ($model->moverTarefa($tarefa_id, $coluna)) {
+        fd_audit_log('projeto.task.move', 'projeto_tarefa', $tarefa_id, [
+            'coluna' => $coluna,
+        ]);
+        http_response_code(204);
+        exit;
+    }
+
+    http_response_code(404);
     exit;
 }
 
 function excluirTarefa(ProjetoModel $model): void
 {
     if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-        header('Location: /modules/painel.php?mod=projetos');
+        header('Location: /projetos');
         exit;
     }
 
     $tarefa_id  = (int)($_POST['tarefa_id'] ?? 0);
     $projeto_id = (int)($_POST['projeto_id'] ?? 0);
 
+    $ok = false;
     if ($tarefa_id > 0) {
-        $model->excluirTarefa($tarefa_id);
+        $ok = $model->excluirTarefa($tarefa_id);
+        if ($ok) {
+            fd_audit_log('projeto.task.delete', 'projeto_tarefa', $tarefa_id, [
+                'projeto_id' => $projeto_id,
+            ]);
+        }
     }
 
-    header('Location: /modules/painel.php?mod=projeto_detalhe&id=' . $projeto_id);
+    header('Location: /projeto?id=' . $projeto_id . ($ok ? '&tarefa_excluida=1' : '&erro_tarefa=1'));
     exit;
 }
 
 function atualizarProjeto(ProjetoModel $model): void
 {
     if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-        header('Location: /modules/painel.php?mod=projetos');
+        header('Location: /projetos');
         exit;
     }
 
-    $id           = (int)($_POST['projeto_id'] ?? 0);
-    $nomeProjeto  = trim($_POST['nome_projeto'] ?? '');
-    // ler demais campos (tipo_projeto, cliente_id, datas, status, descricao)
+    $id          = (int)($_POST['projeto_id'] ?? 0);
+    $nomeProjeto = trim($_POST['nome_projeto'] ?? '');
+    $tipoProjeto = $_POST['tipo_projeto'] ?? 'outro';
+    $clienteId   = isset($_POST['cliente_id']) && $_POST['cliente_id'] !== ''
+        ? (int)$_POST['cliente_id']
+        : null;
+    $dataInicio  = $_POST['data_inicio'] ?: null;
+    $dataEntrega = $_POST['data_entrega'] ?: null;
+    $status      = $_POST['status'] ?? 'planejado';
+    $descricao   = trim($_POST['descricao'] ?? '');
 
     if ($id <= 0 || $nomeProjeto === '') {
-        header('Location: /modules/painel.php?mod=projetos&erro=1');
+        header('Location: /projetos?erro=1');
         exit;
     }
 
-    $model->atualizarProjeto($id, [
+    $ok = $model->atualizarProjeto($id, [
         'nome_projeto' => $nomeProjeto,
-        // demais campos...
+        'tipo_projeto' => $tipoProjeto,
+        'descricao' => $descricao,
+        'cliente_id' => $clienteId,
+        'data_inicio' => $dataInicio,
+        'data_entrega' => $dataEntrega,
+        'status' => $status,
     ]);
 
-    header('Location: /modules/painel.php?mod=projetos&ok=1');
+    if ($ok) {
+        fd_audit_log('projeto.update', 'projeto', $id, [
+            'nome_projeto' => $nomeProjeto,
+            'status' => $status,
+        ]);
+    }
+
+    header('Location: /projetos' . ($ok ? '?atualizado=1' : '?erro=1'));
     exit;
 }
 
