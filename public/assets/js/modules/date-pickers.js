@@ -106,6 +106,7 @@ function flowdeskDatePicker(initialValue = '', options = {}) {
   const parsedInitial = flowdeskParseDate(initialValue);
   const selected = parsedInitial || (options.defaultToToday ? today : null);
   const viewDate = selected || today;
+  const estimatedPanelHeight = Number(options.panelHeight || 420);
 
   return {
     open: false,
@@ -115,10 +116,36 @@ function flowdeskDatePicker(initialValue = '', options = {}) {
     months: ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'],
     weekdays: ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sab'],
     toggle() {
-      this.open = !this.open;
+      if (this.open) {
+        this.close();
+        return;
+      }
+
+      this.open = true;
+      this.$nextTick(() => this.updatePlacement());
     },
     close() {
       this.open = false;
+      this.$root?.classList.remove('is-open-up', 'is-open-down');
+    },
+    updatePlacement() {
+      const root = this.$root;
+      const trigger = root?.querySelector('.fd-date-picker-trigger');
+      const panel = root?.querySelector('.fd-date-picker-panel');
+
+      if (!root || !trigger) {
+        return;
+      }
+
+      const triggerRect = trigger.getBoundingClientRect();
+      const viewportHeight = window.innerHeight || document.documentElement.clientHeight || 0;
+      const panelHeight = panel?.offsetHeight || estimatedPanelHeight;
+      const spaceBelow = viewportHeight - triggerRect.bottom;
+      const spaceAbove = triggerRect.top;
+      const shouldOpenUp = spaceBelow < panelHeight + 18 && spaceAbove > spaceBelow;
+
+      root.classList.toggle('is-open-up', shouldOpenUp);
+      root.classList.toggle('is-open-down', !shouldOpenUp);
     },
     get triggerLabel() {
       if (!this.selectedValue) {
@@ -133,6 +160,14 @@ function flowdeskDatePicker(initialValue = '', options = {}) {
     },
     get selectedDate() {
       return flowdeskParseDate(this.selectedValue);
+    },
+    notifyNativeInput() {
+      this.$nextTick(() => {
+        const input = this.$root?.querySelector('.fd-date-picker-native');
+        if (!input) return;
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+      });
     },
     prevMonth() {
       if (this.viewMonth === 0) {
@@ -171,16 +206,19 @@ function flowdeskDatePicker(initialValue = '', options = {}) {
     },
     selectDay(day) {
       this.selectedValue = `${this.viewYear}-${flowdeskPad(this.viewMonth + 1)}-${flowdeskPad(day)}`;
+      this.notifyNativeInput();
       this.close();
     },
     clear() {
       this.selectedValue = '';
+      this.notifyNativeInput();
       this.close();
     },
     selectToday() {
       this.viewYear = today.getFullYear();
       this.viewMonth = today.getMonth();
       this.selectedValue = flowdeskFormatDate(today);
+      this.notifyNativeInput();
       this.close();
     },
     days() {

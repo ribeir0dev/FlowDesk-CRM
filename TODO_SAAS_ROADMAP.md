@@ -277,19 +277,34 @@ Preparar o projeto para rodar como plataforma e nao apenas ambiente local.
 
 ### Ambiente
 
-- [ ] Separar configuracoes por ambiente: local, staging e producao.
-- [ ] Mover segredos para variaveis de ambiente.
-- [ ] Revisar bootstrap e autoload para ambiente produtivo.
-- [ ] Padronizar logs de aplicacao e erros.
+- [x] Separar configuracoes por ambiente: local, staging e producao.
+- [x] Mover segredos para variaveis de ambiente.
+- [x] Revisar bootstrap e autoload para ambiente produtivo.
+- [x] Padronizar logs de aplicacao e erros.
 - [ ] Configurar storage de arquivos fora da pasta publica local, quando necessario.
 
 ### Banco e deploy
 
-- [ ] Criar migracoes versionadas de banco.
-- [ ] Criar processo confiavel de deploy.
-- [ ] Criar rotina de backup de banco.
-- [ ] Criar politica de rollback.
+- [x] Criar migracoes versionadas de banco.
+- [x] Criar processo confiavel de deploy.
+- [x] Criar rotina de backup de banco.
+- [x] Criar politica de rollback.
 - [ ] Revisar indices e performance das tabelas principais.
+
+### Progresso executado
+
+- [x] Criar carregamento de `.env` via `config/env.php`.
+- [x] Mover credenciais de banco para variaveis `DB_*`.
+- [x] Criar `.env.example` com ambiente, chave da aplicacao, timezone, log e banco.
+- [x] Criar logging centralizado em `config/errors.php`.
+- [x] Centralizar `display_errors` por `APP_ENV`.
+- [x] Remover configuracoes locais de erro duplicadas em controllers principais.
+- [x] Criar pasta `storage/logs` versionada com `.gitkeep`.
+- [x] Ignorar `.env`, uploads locais e logs no Git.
+- [x] Documentar deploy, backup, rollback e checklist pos-deploy em `docs/PRODUCAO_FASE6.md`.
+- [x] Criar base de storage Google Drive com migration, model, service e documentacao.
+- [ ] Implementar OAuth do Google Drive e status real da integracao.
+- [ ] Migrar uploads ligados a clientes para pastas no Google Drive.
 
 ### Entregaveis
 
@@ -369,6 +384,7 @@ Expandir o produto depois da base SaaS estar consistente.
 - [ ] Dashboard executivo por conta.
 - [ ] Templates de propostas e projetos.
 - [ ] Integracao com WhatsApp, email e gateways externos.
+- [ ] Bot privado no Telegram para lancar entradas e saidas financeiras com validacao por usuario autorizado.
 - [ ] API publica ou privada.
 - [ ] White-label ou dominio personalizado.
 

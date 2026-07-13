@@ -14,7 +14,7 @@ require_once __DIR__ . '/../../app/Models/HospedagemModel.php';
 $model = new HospedagemModel($pdo);
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-    header('Location: /hospedagens');
+    header('Location: ' . fd_base_path() . '/hospedagens');
     exit;
 }
 
@@ -42,7 +42,7 @@ function criarHospedagem(HospedagemModel $model): void
     $dataFim    = $_POST['data_fim'] ?? null;
 
     if ($nome === '' || !$dataInicio || !$dataFim) {
-        header('Location: /hospedagens?erro=1');
+        header('Location: ' . fd_base_path() . '/hospedagens?erro=1');
         exit;
     }
 
@@ -53,11 +53,11 @@ function criarHospedagem(HospedagemModel $model): void
             'data_inicio' => $dataInicio,
             'data_fim' => $dataFim,
         ]);
-        header('Location: /hospedagens?ok=1');
+        header('Location: ' . fd_base_path() . '/hospedagens?ok=1');
         exit;
     }
 
-    header('Location: /hospedagens?erro=1');
+    header('Location: ' . fd_base_path() . '/hospedagens?erro=1');
     exit;
 }
 
@@ -70,10 +70,10 @@ function excluirHospedagem(HospedagemModel $model): void
 
     if ($id > 0 && $model->excluir($id)) {
         fd_audit_log('hospedagem.delete', 'hospedagem', $id);
-        header('Location: /hospedagens?excluida=1');
+        header('Location: ' . fd_base_path() . '/hospedagens?excluida=1');
         exit;
     }
 
-    header('Location: /hospedagens?erro=1');
+    header('Location: ' . fd_base_path() . '/hospedagens?erro=1');
     exit;
 }

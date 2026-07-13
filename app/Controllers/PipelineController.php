@@ -1,9 +1,6 @@
 <?php
 // app/Controllers/PipelineController.php
 
-ini_set('display_errors', 1);
-error_reporting(E_ALL);
-
 if (session_status() !== PHP_SESSION_ACTIVE) {
     session_start();
 }
@@ -51,7 +48,7 @@ switch ($acao) {
         break;
 
     default:
-        header('Location: /pipeline');
+        header('Location: ' . fd_base_path() . '/pipeline');
         exit;
 }
 
@@ -119,14 +116,20 @@ function criarOportunidade(OportunidadeModel $model): void
         exit;
     }
 
-    $id = $model->criar($_POST);
+    $data = normalizarPayloadOportunidade($_POST);
+    if ($data['cliente_id'] <= 0 || $data['funil_estagio_id'] <= 0 || $data['titulo'] === '') {
+        header('Location: ' . fd_base_path() . '/pipeline?erro=1');
+        exit;
+    }
+
+    $id = $model->criar($data);
     if ($id > 0) {
         fd_audit_log('pipeline.create', 'oportunidade', $id, [
-            'titulo' => trim((string) ($_POST['titulo'] ?? '')),
-            'cliente_id' => (int) ($_POST['cliente_id'] ?? 0),
+            'titulo' => $data['titulo'],
+            'cliente_id' => (int) $data['cliente_id'],
         ]);
     }
-    header('Location: /pipeline' . ($id > 0 ? '?ok=1' : '?erro=1'));
+    header('Location: ' . fd_base_path() . '/pipeline' . ($id > 0 ? '?ok=1' : '?erro=1'));
     exit;
 }
 
@@ -139,17 +142,23 @@ function atualizarOportunidade(OportunidadeModel $model): void
 
     $id = (int) ($_POST['id'] ?? 0);
     if ($id <= 0) {
-        header('Location: /pipeline?erro=1');
+        header('Location: ' . fd_base_path() . '/pipeline?erro=1');
         exit;
     }
 
-    $ok = $model->atualizar($id, $_POST);
+    $data = normalizarPayloadOportunidade($_POST);
+    if ($data['cliente_id'] <= 0 || $data['funil_estagio_id'] <= 0 || $data['titulo'] === '') {
+        header('Location: ' . fd_base_path() . '/pipeline?erro=1');
+        exit;
+    }
+
+    $ok = $model->atualizar($id, $data);
     if ($ok) {
         fd_audit_log('pipeline.update', 'oportunidade', $id, [
             'titulo' => trim((string) ($_POST['titulo'] ?? '')),
         ]);
     }
-    header('Location: /pipeline' . ($ok ? '?ok=1' : '?erro=1'));
+    header('Location: ' . fd_base_path() . '/pipeline' . ($ok ? '?ok=1' : '?erro=1'));
     exit;
 }
 
@@ -170,10 +179,10 @@ function marcarGanha(OportunidadeModel $model): void
                 'funil_estagio_id' => $ganhoId,
             ]);
         }
-        header('Location: /pipeline' . ($ok ? '?ok=1' : '?erro=1'));
+        header('Location: ' . fd_base_path() . '/pipeline' . ($ok ? '?ok=1' : '?erro=1'));
         exit;
     }
-    header('Location: /pipeline?erro=1');
+        header('Location: ' . fd_base_path() . '/pipeline?erro=1');
     exit;
 }
 
@@ -196,10 +205,10 @@ function marcarPerdida(OportunidadeModel $model): void
                 'motivo_perda' => $motivo,
             ]);
         }
-        header('Location: /pipeline' . ($ok ? '?ok=1' : '?erro=1'));
+        header('Location: ' . fd_base_path() . '/pipeline' . ($ok ? '?ok=1' : '?erro=1'));
         exit;
     }
-    header('Location: /pipeline?erro=1');
+    header('Location: ' . fd_base_path() . '/pipeline?erro=1');
     exit;
 }
 
@@ -235,6 +244,23 @@ function excluirOportunidade(OportunidadeModel $model): void
     if ($ok) {
         fd_audit_log('pipeline.delete', 'oportunidade', $id);
     }
-    header('Location: /pipeline' . ($ok ? '?ok=1' : '?erro=1'));
+    header('Location: ' . fd_base_path() . '/pipeline' . ($ok ? '?ok=1' : '?erro=1'));
     exit;
+}
+
+function normalizarPayloadOportunidade(array $data): array
+{
+    return [
+        'cliente_id' => (int) ($data['cliente_id'] ?? 0),
+        'projeto_id' => isset($data['projeto_id']) && $data['projeto_id'] !== '' ? (int) $data['projeto_id'] : null,
+        'funil_estagio_id' => (int) ($data['funil_estagio_id'] ?? 0),
+        'titulo' => mb_substr(trim((string) ($data['titulo'] ?? '')), 0, 160),
+        'valor_previsto' => (float) ($data['valor_previsto'] ?? 0),
+        'probabilidade' => max(0, min(100, (int) ($data['probabilidade'] ?? 0))),
+        'origem_lead' => mb_substr(trim((string) ($data['origem_lead'] ?? '')), 0, 120),
+        'responsavel' => mb_substr(trim((string) ($data['responsavel'] ?? '')), 0, 120),
+        'data_prevista_fechamento' => trim((string) ($data['data_prevista_fechamento'] ?? '')),
+        'motivo_perda' => mb_substr(trim((string) ($data['motivo_perda'] ?? '')), 0, 500),
+        'observacoes' => mb_substr(trim((string) ($data['observacoes'] ?? '')), 0, 4000),
+    ];
 }

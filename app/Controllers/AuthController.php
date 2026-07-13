@@ -1,9 +1,6 @@
 <?php
 // app/Controllers/AuthController.php
 
-ini_set('display_errors', 1); // REMOVER EM PRODUCAO
-error_reporting(E_ALL);
-
 if (session_status() !== PHP_SESSION_ACTIVE) {
     session_start();
 }
@@ -49,6 +46,26 @@ switch ($acao) {
 
     case 'updateProfile':
         handleUpdateProfile($authModel);
+        break;
+
+    case 'updatePassword':
+        handleUpdatePassword($authModel);
+        break;
+
+    case 'prepareAvatar':
+        handlePrepareAvatar();
+        break;
+
+    case 'confirmAvatar':
+        handleConfirmAvatar($authModel);
+        break;
+
+    case 'discardAvatar':
+        handleDiscardAvatar();
+        break;
+
+    case 'updateSocialLink':
+        handleUpdateSocialLink($authModel);
         break;
 
     case 'updatePreferences':
@@ -373,34 +390,30 @@ function handleUpdateProfile(AuthModel $authModel): void
         exit;
     }
 
-    $nome = trim($_POST['nome'] ?? '');
-    $email = trim($_POST['email'] ?? '');
-    $senha = $_POST['senha'] ?? '';
+    $nome = mb_substr(trim((string) ($_POST['nome'] ?? '')), 0, 160);
+    $email = mb_substr(trim((string) ($_POST['email'] ?? '')), 0, 180);
+    $senha = (string) ($_POST['senha'] ?? '');
+    $senhaAtual = (string) ($_POST['senha_atual'] ?? '');
+    $confSenha = (string) ($_POST['conf_senha'] ?? '');
 
-    if ($nome === '' || $email === '') {
+    if ($nome === '' || $email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
         header('Location: ' . fd_base_path() . '/configuracoes?erro=1');
         exit;
     }
 
-    $fotoPath = null;
-    if (!empty($_FILES['foto_perfil']['name']) && $_FILES['foto_perfil']['error'] === UPLOAD_ERR_OK) {
-        $ext = strtolower(pathinfo($_FILES['foto_perfil']['name'], PATHINFO_EXTENSION));
+    if ($senha !== '' && (strlen($senha) < 8 || $senha !== $confSenha)) {
+        header('Location: ' . fd_base_path() . '/configuracoes?erro=1');
+        exit;
+    }
 
-        if (in_array($ext, ['jpg', 'jpeg', 'png'], true)) {
-            $dir = __DIR__ . '/../../public/uploads/avatars/';
-
-            if (!is_dir($dir)) {
-                mkdir($dir, 0775, true);
-            }
-
-            $nomeArq = 'user_' . $userIdSess . '.' . $ext;
-            $destino = $dir . $nomeArq;
-
-            if (move_uploaded_file($_FILES['foto_perfil']['tmp_name'], $destino)) {
-                $fotoPath = '/uploads/avatars/' . $nomeArq;
-            }
+    if ($senha !== '') {
+        $currentUser = $authModel->findUserById($userIdSess);
+        if (!$currentUser || !password_verify($senhaAtual, (string) ($currentUser['senha'] ?? ''))) {
+            header('Location: ' . fd_base_path() . '/configuracoes?erro=1');
+            exit;
         }
     }
+    $fotoPath = salvarAvatarPerfil($userIdSess);
 
     $senhaHash = null;
     if ($senha !== '') {
@@ -417,6 +430,270 @@ function handleUpdateProfile(AuthModel $authModel): void
 
     header('Location: ' . fd_base_path() . '/configuracoes?ok=1');
     exit;
+}
+
+function authJsonResponse(bool $ok, string $message, array $data = [], int $status = 200): never
+{
+    http_response_code($status);
+    header('Content-Type: application/json; charset=utf-8');
+    echo json_encode(
+        array_merge(['ok' => $ok, 'message' => $message], $data),
+        JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
+    );
+    exit;
+}
+
+function handleUpdatePassword(AuthModel $authModel): void
+{
+    if (session_status() !== PHP_SESSION_ACTIVE) {
+        session_start();
+    }
+
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST' || empty($_SESSION['user_id'])) {
+        header('Location: ' . fd_base_path() . '/configuracoes');
+        exit;
+    }
+
+    $userId = (int) $_SESSION['user_id'];
+    $currentPassword = (string) ($_POST['senha_atual'] ?? '');
+    $newPassword = (string) ($_POST['senha'] ?? '');
+    $confirmation = (string) ($_POST['conf_senha'] ?? '');
+    $currentUser = $authModel->findUserById($userId);
+
+    if (!$currentUser
+        || !password_verify($currentPassword, (string) ($currentUser['senha'] ?? ''))
+        || strlen($newPassword) < 8
+        || $newPassword !== $confirmation) {
+        header('Location: ' . fd_base_path() . '/configuracoes?senha=erro#minha-conta');
+        exit;
+    }
+
+    $ok = $authModel->updateUserPassword($userId, password_hash($newPassword, PASSWORD_DEFAULT));
+    header('Location: ' . fd_base_path() . '/configuracoes?' . ($ok ? 'senha=ok' : 'senha=erro') . '#minha-conta');
+    exit;
+}
+
+function avatarTempDirectory(): string
+{
+    return __DIR__ . '/../../storage/tmp/avatars/';
+}
+
+function avatarTempCleanup(): void
+{
+    $directory = avatarTempDirectory();
+    if (!is_dir($directory)) {
+        return;
+    }
+
+    $limit = time() - 3600;
+    foreach (glob($directory . '*') ?: [] as $file) {
+        if (is_file($file) && (int) @filemtime($file) < $limit) {
+            @unlink($file);
+        }
+    }
+}
+
+function handlePrepareAvatar(): void
+{
+    if (session_status() !== PHP_SESSION_ACTIVE) {
+        session_start();
+    }
+
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST' || empty($_SESSION['user_id'])) {
+        authJsonResponse(false, 'Sua sessão expirou.', [], 401);
+    }
+
+    $file = $_FILES['foto_perfil'] ?? null;
+    if (!is_array($file) || ($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+        authJsonResponse(false, 'Selecione uma imagem válida.', [], 422);
+    }
+
+    $size = (int) ($file['size'] ?? 0);
+    if ($size <= 0 || $size > 8 * 1024 * 1024) {
+        authJsonResponse(false, 'A imagem deve ter no máximo 8 MB.', [], 422);
+    }
+
+    $tmpName = (string) ($file['tmp_name'] ?? '');
+    $imageInfo = $tmpName !== '' ? @getimagesize($tmpName) : false;
+    $mime = is_array($imageInfo) ? (string) ($imageInfo['mime'] ?? '') : '';
+    $allowed = ['image/jpeg' => 'jpg', 'image/png' => 'png', 'image/webp' => 'webp'];
+    if (!isset($allowed[$mime])) {
+        authJsonResponse(false, 'Use uma imagem JPEG, PNG ou WebP.', [], 422);
+    }
+
+    avatarTempCleanup();
+    $directory = avatarTempDirectory();
+    if (!is_dir($directory) && !mkdir($directory, 0775, true) && !is_dir($directory)) {
+        authJsonResponse(false, 'Não foi possível preparar o upload.', [], 500);
+    }
+
+    $token = bin2hex(random_bytes(24));
+    $path = $directory . $token . '.' . $allowed[$mime];
+    if (!move_uploaded_file($tmpName, $path)) {
+        authJsonResponse(false, 'Não foi possível concluir o upload.', [], 500);
+    }
+
+    $_SESSION['avatar_uploads'][$token] = [
+        'path' => $path,
+        'user_id' => (int) $_SESSION['user_id'],
+        'created_at' => time(),
+    ];
+
+    authJsonResponse(true, 'Imagem enviada. Ajuste o recorte.', [
+        'token' => $token,
+        'file' => [
+            'name' => mb_substr((string) ($file['name'] ?? 'imagem'), 0, 180),
+            'size' => $size,
+            'type' => $mime,
+        ],
+    ]);
+}
+
+function handleConfirmAvatar(AuthModel $authModel): void
+{
+    if (session_status() !== PHP_SESSION_ACTIVE) {
+        session_start();
+    }
+
+    $userId = (int) ($_SESSION['user_id'] ?? 0);
+    $token = trim((string) ($_POST['upload_token'] ?? ''));
+    $upload = $_SESSION['avatar_uploads'][$token] ?? null;
+
+    if ($userId <= 0 || !is_array($upload) || (int) ($upload['user_id'] ?? 0) !== $userId) {
+        authJsonResponse(false, 'Este upload não é mais válido.', [], 422);
+    }
+
+    $avatarPath = salvarAvatarPerfil($userId);
+    if (!$avatarPath || !$authModel->updateUserAvatar($userId, $avatarPath)) {
+        authJsonResponse(false, 'Não foi possível salvar a nova foto.', [], 422);
+    }
+
+    if (!empty($upload['path']) && is_file($upload['path'])) {
+        @unlink($upload['path']);
+    }
+    unset($_SESSION['avatar_uploads'][$token]);
+    $_SESSION['user_avatar'] = $avatarPath;
+
+    authJsonResponse(true, 'Foto de perfil atualizada.', [
+        'avatar_url' => fd_base_path() . $avatarPath . '?v=' . time(),
+    ]);
+}
+
+function handleDiscardAvatar(): void
+{
+    if (session_status() !== PHP_SESSION_ACTIVE) {
+        session_start();
+    }
+
+    $token = trim((string) ($_POST['upload_token'] ?? ''));
+    $upload = $_SESSION['avatar_uploads'][$token] ?? null;
+    if (is_array($upload)
+        && (int) ($upload['user_id'] ?? 0) === (int) ($_SESSION['user_id'] ?? 0)
+        && !empty($upload['path'])
+        && is_file($upload['path'])) {
+        @unlink($upload['path']);
+    }
+    unset($_SESSION['avatar_uploads'][$token]);
+
+    authJsonResponse(true, 'Imagem descartada.');
+}
+
+function handleUpdateSocialLink(AuthModel $authModel): void
+{
+    if (session_status() !== PHP_SESSION_ACTIVE) {
+        session_start();
+    }
+
+    $userId = (int) ($_SESSION['user_id'] ?? 0);
+    $network = strtolower(trim((string) ($_POST['network'] ?? '')));
+    $url = trim((string) ($_POST['url'] ?? ''));
+
+    if ($userId <= 0 || !in_array($network, ['instagram', 'behance', 'website'], true)) {
+        authJsonResponse(false, 'Rede social inválida.', [], 422);
+    }
+
+    if (mb_strlen($url) > 500) {
+        authJsonResponse(false, 'O link é muito longo.', [], 422);
+    }
+
+    if ($url !== '') {
+        $validUrl = filter_var($url, FILTER_VALIDATE_URL);
+        $scheme = strtolower((string) parse_url($url, PHP_URL_SCHEME));
+        if (!$validUrl || !in_array($scheme, ['http', 'https'], true)) {
+            authJsonResponse(false, 'Informe um endereço completo começando com http:// ou https://.', [], 422);
+        }
+    }
+
+    $ok = $authModel->updateSocialLink($userId, $network, $url !== '' ? $url : null);
+    authJsonResponse($ok, $ok ? 'Link atualizado.' : 'Não foi possível atualizar o link.', [
+        'network' => $network,
+        'url' => $url,
+    ], $ok ? 200 : 500);
+}
+
+function salvarAvatarPerfil(int $userId): ?string
+{
+    $dir = __DIR__ . '/../../public/uploads/avatars/';
+    if (!is_dir($dir)) {
+        mkdir($dir, 0775, true);
+    }
+
+    $cropData = trim((string) ($_POST['avatar_crop_data'] ?? ''));
+    if ($cropData !== '') {
+        if (strlen($cropData) > 12 * 1024 * 1024) {
+            return null;
+        }
+
+        if (!preg_match('/^data:image\/(jpeg|png|webp);base64,/', $cropData, $matches)) {
+            return null;
+        }
+
+        $extension = $matches[1] === 'jpeg' ? 'jpg' : $matches[1];
+        $encoded = substr($cropData, strpos($cropData, ',') + 1);
+        $binary = base64_decode($encoded, true);
+
+        if ($binary === false || strlen($binary) > 8 * 1024 * 1024) {
+            return null;
+        }
+
+        $nomeArq = 'user_' . $userId . '_avatar.' . $extension;
+        if (file_put_contents($dir . $nomeArq, $binary) !== false) {
+            return '/uploads/avatars/' . $nomeArq;
+        }
+
+        return null;
+    }
+
+    if (empty($_FILES['foto_perfil']['name']) || ($_FILES['foto_perfil']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+        return null;
+    }
+
+    if ((int) ($_FILES['foto_perfil']['size'] ?? 0) > 8 * 1024 * 1024) {
+        return null;
+    }
+
+    $tmpName = (string) ($_FILES['foto_perfil']['tmp_name'] ?? '');
+    $ext = strtolower(pathinfo((string) ($_FILES['foto_perfil']['name'] ?? ''), PATHINFO_EXTENSION));
+    $imageInfo = $tmpName !== '' ? @getimagesize($tmpName) : false;
+    $mime = is_array($imageInfo) ? (string) ($imageInfo['mime'] ?? '') : '';
+    $allowed = [
+        'image/jpeg' => 'jpg',
+        'image/png' => 'png',
+        'image/webp' => 'webp',
+    ];
+
+    if (!isset($allowed[$mime]) || !in_array($ext, ['jpg', 'jpeg', 'png', 'webp'], true)) {
+        return null;
+    }
+
+    $nomeArq = 'user_' . $userId . '_avatar.' . $allowed[$mime];
+    $destino = $dir . $nomeArq;
+
+    if (move_uploaded_file($tmpName, $destino)) {
+        return '/uploads/avatars/' . $nomeArq;
+    }
+
+    return null;
 }
 
 
@@ -465,7 +742,17 @@ function handleUpdateModulePreferences(AuthModel $authModel): void
         session_start();
     }
 
+    $wantsJson = strtolower((string) ($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '')) === 'xmlhttprequest'
+        || str_contains(strtolower((string) ($_SERVER['HTTP_ACCEPT'] ?? '')), 'application/json');
+
     if ($_SERVER['REQUEST_METHOD'] !== 'POST' || empty($_SESSION['user_id'])) {
+        if ($wantsJson) {
+            http_response_code(401);
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode(['ok' => false, 'message' => 'Sessao expirada. Faca login novamente.']);
+            exit;
+        }
+
         header('Location: ' . fd_base_path() . '/configuracoes#modulos');
         exit;
     }
@@ -484,6 +771,18 @@ function handleUpdateModulePreferences(AuthModel $authModel): void
 
     if ($ok) {
         $_SESSION['user_sidebar_modules'] = $selectedModules;
+    }
+
+    if ($wantsJson) {
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode([
+            'ok' => $ok,
+            'modules' => $selectedModules,
+            'message' => $ok
+                ? 'Organizacao de modulos atualizada.'
+                : 'Nao foi possivel salvar a organizacao de modulos.',
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        exit;
     }
 
     header('Location: ' . fd_base_path() . '/configuracoes?' . ($ok ? 'modules=ok' : 'modules=erro') . '#modulos');

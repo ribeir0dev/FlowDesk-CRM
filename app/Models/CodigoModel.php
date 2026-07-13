@@ -6,6 +6,7 @@ class CodigoModel
 {
     private PDO $pdo;
     private int $workspaceId;
+    private array $columnCache = [];
 
     public function __construct(PDO $pdo)
     {
@@ -20,6 +21,25 @@ class CodigoModel
         }
 
         return $this->workspaceId;
+    }
+
+    private function hasColumn(string $column): bool
+    {
+        if (array_key_exists($column, $this->columnCache)) {
+            return $this->columnCache[$column];
+        }
+
+        $stmt = $this->pdo->prepare("
+            SELECT COUNT(*)
+            FROM information_schema.COLUMNS
+            WHERE TABLE_SCHEMA = DATABASE()
+              AND TABLE_NAME = 'codigos'
+              AND COLUMN_NAME = ?
+        ");
+        $stmt->execute([$column]);
+        $this->columnCache[$column] = (int) $stmt->fetchColumn() > 0;
+
+        return $this->columnCache[$column];
     }
 
     public function listarFiltros(): array
@@ -38,7 +58,7 @@ class CodigoModel
         $sort = trim((string) ($filters['sort'] ?? 'recentes'));
 
         $sql = "
-            SELECT c.*, u.nome AS autor_nome
+            SELECT c.*, u.nome AS autor_nome, u.foto_perfil AS autor_foto
             FROM codigos c
             INNER JOIN usuarios u ON u.id = c.user_id
             WHERE c.workspace_id = :workspace_id
@@ -74,7 +94,7 @@ class CodigoModel
 
     public function buscarPorId(int $id): ?array
     {
-        $stmt = $this->pdo->prepare("\n            SELECT c.*, u.nome AS autor_nome\n            FROM codigos c\n            INNER JOIN usuarios u ON u.id = c.user_id\n            WHERE c.id = ? AND c.workspace_id = ?\n            LIMIT 1\n        ");
+        $stmt = $this->pdo->prepare("\n            SELECT c.*, u.nome AS autor_nome, u.foto_perfil AS autor_foto\n            FROM codigos c\n            INNER JOIN usuarios u ON u.id = c.user_id\n            WHERE c.id = ? AND c.workspace_id = ?\n            LIMIT 1\n        ");
         $stmt->execute([$id, $this->currentWorkspaceId()]);
         $codigo = $stmt->fetch(PDO::FETCH_ASSOC);
         return $codigo ?: null;
@@ -82,9 +102,9 @@ class CodigoModel
 
     public function criar(array $dados): bool
     {
-        $stmt = $this->pdo->prepare("\n            INSERT INTO codigos (workspace_id, user_id, titulo, descricao, categoria, tipo, dificuldade, instrucoes, conteudo, criado_em, atualizado_em)\n            VALUES (:workspace_id, :user_id, :titulo, :descricao, :categoria, :tipo, :dificuldade, :instrucoes, :conteudo, NOW(), NOW())\n        ");
-
-        $ok = $stmt->execute([
+        $columns = ['workspace_id', 'user_id', 'titulo', 'descricao', 'categoria', 'tipo', 'dificuldade', 'instrucoes', 'conteudo'];
+        $placeholders = [':workspace_id', ':user_id', ':titulo', ':descricao', ':categoria', ':tipo', ':dificuldade', ':instrucoes', ':conteudo'];
+        $params = [
             ':workspace_id' => $this->currentWorkspaceId(),
             ':user_id' => (int) ($dados['user_id'] ?? 0),
             ':titulo' => trim((string) ($dados['titulo'] ?? '')),
@@ -94,7 +114,21 @@ class CodigoModel
             ':dificuldade' => trim((string) ($dados['dificuldade'] ?? 'basico')) ?: 'basico',
             ':instrucoes' => trim((string) ($dados['instrucoes'] ?? '')) ?: null,
             ':conteudo' => trim((string) ($dados['conteudo'] ?? '')),
-        ]);
+        ];
+
+        if ($this->hasColumn('preview_image')) {
+            $columns[] = 'preview_image';
+            $placeholders[] = ':preview_image';
+            $params[':preview_image'] = trim((string) ($dados['preview_image'] ?? '')) ?: null;
+        }
+
+        $stmt = $this->pdo->prepare(sprintf(
+            "\n            INSERT INTO codigos (%s, criado_em, atualizado_em)\n            VALUES (%s, NOW(), NOW())\n        ",
+            implode(', ', $columns),
+            implode(', ', $placeholders)
+        ));
+
+        $ok = $stmt->execute($params);
 
         if (!$ok) {
             $errorInfo = $stmt->errorInfo();
@@ -102,6 +136,51 @@ class CodigoModel
         }
 
         return true;
+    }
+
+    public function atualizar(int $id, array $dados): bool
+    {
+        $campos = [
+            'titulo = :titulo',
+            'descricao = :descricao',
+            'categoria = :categoria',
+            'tipo = :tipo',
+            'dificuldade = :dificuldade',
+            'instrucoes = :instrucoes',
+            'conteudo = :conteudo',
+            'atualizado_em = NOW()',
+        ];
+
+        $params = [
+            ':id' => $id,
+            ':workspace_id' => $this->currentWorkspaceId(),
+            ':titulo' => trim((string) ($dados['titulo'] ?? '')),
+            ':descricao' => trim((string) ($dados['descricao'] ?? '')) ?: null,
+            ':categoria' => trim((string) ($dados['categoria'] ?? 'Sem categoria')),
+            ':tipo' => trim((string) ($dados['tipo'] ?? 'Snippet')) ?: 'Snippet',
+            ':dificuldade' => trim((string) ($dados['dificuldade'] ?? 'basico')) ?: 'basico',
+            ':instrucoes' => trim((string) ($dados['instrucoes'] ?? '')) ?: null,
+            ':conteudo' => trim((string) ($dados['conteudo'] ?? '')),
+        ];
+
+        if ($this->hasColumn('preview_image') && array_key_exists('preview_image', $dados)) {
+            $campos[] = 'preview_image = :preview_image';
+            $params[':preview_image'] = trim((string) ($dados['preview_image'] ?? '')) ?: null;
+        }
+
+        $stmt = $this->pdo->prepare('
+            UPDATE codigos
+            SET ' . implode(', ', $campos) . '
+            WHERE id = :id AND workspace_id = :workspace_id
+        ');
+
+        $ok = $stmt->execute($params);
+        if (!$ok) {
+            $errorInfo = $stmt->errorInfo();
+            throw new RuntimeException('Falha ao atualizar codigo: ' . implode(' | ', array_filter($errorInfo ?: [])));
+        }
+
+        return $stmt->rowCount() >= 0;
     }
 
     public function alternarFavorito(int $id): bool

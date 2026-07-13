@@ -18,7 +18,7 @@ if ($id <= 0) {
 }
 
 $model = new ClienteModel($pdo);
-$cliente = $model->buscarPorId($id);
+$cliente = $model->buscarResumoOperacional($id);
 
 if (!$cliente) {
     echo '<p class="fd-empty-copy">Cliente nao encontrado.</p>';
@@ -57,6 +57,7 @@ $hospedagem = $blocos['hospedagem']['dados'] ?? [];
 $acessoSite = $blocos['acesso_site']['dados'] ?? [];
 $registroBr = $blocos['registro_br']['dados'] ?? [];
 $dataCadastro = $cliente['criado_em'] ?? null;
+$atividadesRecentes = $model->listarAtividadesRecentes($id, 6);
 
 $status = strtolower($cliente['status'] ?? 'inativo');
 $statusMap = [
@@ -83,6 +84,13 @@ if (isset($_GET['foto']) && $_GET['foto'] === 'ok') {
 if (isset($_GET['foto']) && $_GET['foto'] === 'erro') {
     $mensagens[] = ['type' => 'danger', 'text' => 'Nao foi possivel enviar a foto do cliente.'];
 }
+if (isset($_GET['limit']) && $_GET['limit'] === 'storage') {
+    $mensagens[] = [
+        'type' => 'danger',
+        'text' => (string) ($_SESSION['billing_gate_message'] ?? 'Seu workspace atingiu o limite de armazenamento do plano atual.'),
+    ];
+}
+unset($_SESSION['billing_gate_message']);
 
 $accessCards = [
     [
@@ -138,7 +146,10 @@ $accessCards = [
     <section class="fd-page-header">
         <div>
             <p class="fd-page-eyebrow">Relacionamento</p>
-            <h2 class="fd-page-title"><?= htmlspecialchars($cliente['nome']) ?></h2>
+            <div class="fd-client-detail-title-row">
+                <h2 class="fd-page-title"><?= htmlspecialchars($cliente['nome']) ?></h2>
+                <span class="fd-badge <?= $statusInfo['class'] ?>"><?= $statusInfo['label'] ?></span>
+            </div>
             <p class="fd-page-subtitle">Dados principais, acessos e materiais centralizados em uma unica ficha.</p>
         </div>
 
@@ -153,6 +164,16 @@ $accessCards = [
             <a href="<?= ($base ?? '') ?>/clientes" class="fd-btn-secondary">
                 <i class="ri-arrow-left-line"></i>
                 <span>Voltar</span>
+            </a>
+
+            <a href="<?= ($base ?? '') ?>/orcamentos/novo?cliente_id=<?= (int) $cliente['id'] ?>" class="fd-btn-primary">
+                <i class="ri-add-line"></i>
+                <span>Nova proposta</span>
+            </a>
+
+            <a href="<?= ($base ?? '') ?>/projetos?cliente_id=<?= (int) $cliente['id'] ?>" class="fd-btn-primary">
+                <i class="ri-add-line"></i>
+                <span>Novo projeto</span>
             </a>
         </div>
     </section>
@@ -205,6 +226,13 @@ $accessCards = [
                 </div>
             </div>
         </article>
+
+        <article class="fd-card fd-client-detail-kpis">
+            <div class="fd-client-detail-kpi is-green"><span class="fd-reference-icon"><i class="ri-money-dollar-circle-line"></i></span><div><span>Receita recebida</span><strong>R$<?= number_format((float) ($cliente['receita_recebida'] ?? 0), 2, ',', '.') ?></strong><small>Historico financeiro</small></div></div>
+            <div class="fd-client-detail-kpi is-violet"><span class="fd-reference-icon"><i class="ri-file-list-3-line"></i></span><div><span>Propostas emitidas</span><strong><?= (int) ($cliente['total_orcamentos'] ?? 0) ?></strong><small>Valor de R$<?= number_format((float) ($cliente['valor_orcamentos'] ?? 0), 2, ',', '.') ?></small></div></div>
+            <div class="fd-client-detail-kpi is-blue"><span class="fd-reference-icon"><i class="ri-folder-3-line"></i></span><div><span>Projetos ativos</span><strong><?= (int) ($cliente['projetos_abertos'] ?? 0) ?></strong><small>Em andamento</small></div></div>
+            <div class="fd-client-detail-kpi is-orange"><span class="fd-reference-icon"><i class="ri-bar-chart-grouped-line"></i></span><div><span>Status do cliente</span><strong><?= e($statusInfo['label']) ?></strong><small>Relacionamento atual</small></div></div>
+        </article>
     </section>
 
     <section class="fd-card">
@@ -249,66 +277,34 @@ $accessCards = [
         </div>
     </section>
 
-    <section class="fd-card">
-        <div class="fd-card-header">
-            <div>
-                <p class="fd-card-title">
-                    <span class="fd-section-icon"><i class="ri-folder-2-line"></i></span>
-                    Arquivos do cliente
-                </p>
-                <p class="fd-card-subtitle">Espaco reservado para contratos, logos e comprovantes.</p>
-            </div>
-        </div>
-
-        <div class="fd-client-grid fd-client-grid-tight">
-            <article class="fd-card fd-client-access-card">
-                <div class="fd-client-access-head">
-                    <span class="fd-section-icon"><i class="ri-file-shield-line"></i></span>
-                    <h3>Contratos</h3>
+    <section class="fd-client-detail-bottom-grid">
+        <article class="fd-card fd-client-detail-activity-card">
+            <div class="fd-card-header"><p class="fd-card-title"><span class="fd-section-icon"><i class="ri-pulse-line"></i></span>Atividades recentes</p></div>
+            <?php if (empty($atividadesRecentes)): ?>
+                <p class="fd-empty-copy">Nenhuma atividade registrada para este cliente.</p>
+            <?php else: ?>
+                <div class="fd-client-detail-timeline">
+                    <?php foreach ($atividadesRecentes as $atividade): ?>
+                        <?php $iconAtividade = ['projeto' => 'ri-folder-check-line', 'orcamento' => 'ri-file-list-3-line', 'financeiro' => 'ri-money-dollar-circle-line'][$atividade['tipo']] ?? 'ri-time-line'; ?>
+                        <div><span><i class="<?= $iconAtividade ?>"></i></span><p><strong><?= e($atividade['titulo']) ?></strong><small><?= e($atividade['descricao'] ?? '') ?> - <?= !empty($atividade['data_evento']) ? date('d/m/Y H:i', strtotime($atividade['data_evento'])) : 'Sem data' ?></small></p></div>
+                    <?php endforeach; ?>
                 </div>
-                <p class="fd-card-subtitle">Documentos contratuais assinados.</p>
-                <a href="#" class="fd-btn-secondary">
-                    <i class="ri-folder-open-line"></i>
-                    <span>Ver/gerenciar</span>
-                </a>
-            </article>
+            <?php endif; ?>
+        </article>
 
-            <article class="fd-card fd-client-access-card">
-                <div class="fd-client-access-head">
-                    <span class="fd-section-icon"><i class="ri-image-line"></i></span>
-                    <h3>Logos</h3>
-                </div>
-                <p class="fd-card-subtitle">Arquivos de identidade visual do cliente.</p>
-                <a href="#" class="fd-btn-secondary">
-                    <i class="ri-folder-open-line"></i>
-                    <span>Ver/gerenciar</span>
-                </a>
-            </article>
+        <article class="fd-card fd-client-detail-notes-card">
+            <div class="fd-card-header"><p class="fd-card-title"><span class="fd-section-icon"><i class="ri-pushpin-2-line"></i></span>Observacoes internas</p></div>
+            <div class="fd-client-detail-note"><p><?= nl2br(e($cliente['observacoes'] ?: 'Nenhuma observacao interna foi registrada para este cliente.')) ?></p><small>Contexto privado do workspace</small></div>
+            <?php if ($canManageClientes): ?><button type="button" class="fd-btn-secondary" data-bs-toggle="modal" data-bs-target="#modalEditarCliente"><i class="ri-add-line"></i><span>Editar observacoes</span></button><?php endif; ?>
+        </article>
 
-            <article class="fd-card fd-client-access-card">
-                <div class="fd-client-access-head">
-                    <span class="fd-section-icon"><i class="ri-bill-line"></i></span>
-                    <h3>Recibos</h3>
-                </div>
-                <p class="fd-card-subtitle">Comprovantes e faturas pagas.</p>
-                <a href="#" class="fd-btn-secondary">
-                    <i class="ri-folder-open-line"></i>
-                    <span>Ver/gerenciar</span>
-                </a>
-            </article>
-        </div>
-    </section>
-
-    <section class="fd-card fd-client-footer-card">
-        <div>
-            <p class="fd-card-title">Relatorio compartilhavel</p>
-            <p class="fd-card-subtitle">Cliente cadastrado em <?= $dataCadastro ? date('d/m/Y', strtotime($dataCadastro)) : 'data indisponivel' ?>.</p>
-        </div>
-
-        <a href="<?= ($base ?? '') ?>/relatorio-cliente?token=<?= urlencode($cliente['token_publico']) ?>" target="_blank" class="fd-btn-secondary">
-            <i class="ri-link-unlink-m"></i>
-            <span>Gerar link de relatorio</span>
-        </a>
+        <article class="fd-card fd-client-detail-files-card">
+            <div class="fd-card-header"><p class="fd-card-title"><span class="fd-section-icon"><i class="ri-folder-2-line"></i></span>Arquivos e documentos</p></div>
+            <div class="fd-client-file-row"><span><i class="ri-file-shield-2-line"></i></span><div><strong>Contratos</strong><small>Documentos contratuais do cliente</small></div></div>
+            <div class="fd-client-file-row"><span><i class="ri-image-line"></i></span><div><strong>Identidade visual</strong><small>Logos e materiais da marca</small></div></div>
+            <div class="fd-client-file-row"><span><i class="ri-bill-line"></i></span><div><strong>Comprovantes</strong><small>Recibos e documentos financeiros</small></div></div>
+            <a href="<?= ($base ?? '') ?>/relatorio-cliente?token=<?= urlencode($cliente['token_publico']) ?>" target="_blank" class="fd-btn-secondary"><i class="ri-link"></i><span>Abrir relatorio compartilhavel</span></a>
+        </article>
     </section>
 </div>
 

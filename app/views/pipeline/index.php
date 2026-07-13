@@ -30,6 +30,9 @@ $listaClientes = $stmtCli->fetchAll(PDO::FETCH_ASSOC);
 $totalLeads = 0;
 $totalValor = 0.0;
 $totalValorPonderado = 0.0;
+$totalGanhos = 0;
+$totalPerdidos = 0;
+$followUps = [];
 $mensagens = [];
 $canManagePipeline = fd_has_any_role(['owner', 'admin', 'operacional']);
 $canDeletePipeline = fd_has_any_role(['owner', 'admin']);
@@ -41,7 +44,9 @@ if (isset($_GET['erro'])) {
     $mensagens[] = ['type' => 'danger', 'text' => 'Nao foi possivel concluir a acao no pipeline.'];
 }
 
-foreach ($oportunidadesPorEstagio as $ops) {
+foreach ($oportunidadesPorEstagio as $estagioIdResumo => $ops) {
+    $estagioResumo = current(array_filter($estagios, static fn ($item) => (int) $item['id'] === (int) $estagioIdResumo)) ?: [];
+    $slugResumo = (string) ($estagioResumo['slug'] ?? '');
     foreach ($ops as $op) {
         $totalLeads++;
         $valor = (float) $op['valor_previsto'];
@@ -49,8 +54,13 @@ foreach ($oportunidadesPorEstagio as $ops) {
 
         $totalValor += $valor;
         $totalValorPonderado += $valor * ($prob / 100);
+        if (in_array($slugResumo, ['ganho', 'fechado', 'fechado_ganho'], true)) $totalGanhos++;
+        if ($slugResumo === 'perdido') $totalPerdidos++;
+        if (!empty($op['data_prevista_fechamento'])) $followUps[] = ['op' => $op, 'estagio' => $estagioResumo];
     }
 }
+$taxaConversao = ($totalGanhos + $totalPerdidos) > 0 ? round(($totalGanhos / ($totalGanhos + $totalPerdidos)) * 100) : 0;
+usort($followUps, static fn ($a, $b) => strcmp((string) $a['op']['data_prevista_fechamento'], (string) $b['op']['data_prevista_fechamento']));
 ?>
 
 <div class="fd-pipeline">
@@ -89,7 +99,7 @@ foreach ($oportunidadesPorEstagio as $ops) {
         </div>
     <?php endforeach; ?>
 
-    <section class="fd-kpi-grid fd-kpi-grid-3">
+    <section class="fd-kpi-grid fd-pipeline-kpi-grid">
         <article class="fd-card fd-kpi-card">
             <div class="fd-kpi-top">
                 <span class="fd-kpi-label">
@@ -146,6 +156,9 @@ foreach ($oportunidadesPorEstagio as $ops) {
                 <span class="fd-kpi-note fd-trend-neutral sensitive-value">Estimativa de receita esperada do funil</span>
             </div>
         </article>
+
+        <article class="fd-card fd-kpi-card"><div class="fd-kpi-top"><span class="fd-kpi-label"><span class="fd-kpi-icon fd-kpi-icon-violet"><i class="ri-focus-3-line"></i></span>Taxa de conversao</span></div><div class="fd-kpi-main"><h3 class="fd-kpi-value"><?= $taxaConversao ?>%</h3></div><div class="fd-kpi-footer"><span class="fd-kpi-note fd-trend-neutral"><?= $totalGanhos ?> oportunidades ganhas</span></div></article>
+        <article class="fd-card fd-kpi-card"><div class="fd-kpi-top"><span class="fd-kpi-label"><span class="fd-kpi-icon fd-kpi-icon-green"><i class="ri-funds-box-line"></i></span>Previsao do mes</span></div><div class="fd-kpi-main"><h3 class="fd-kpi-value sensitive-value">R$<?= number_format($totalValorPonderado, 2, ',', '.') ?></h3></div><div class="fd-kpi-footer"><span class="fd-kpi-note fd-trend-neutral">Baseada nas probabilidades</span></div></article>
     </section>
 
     <?php if (empty($estagios)): ?>
@@ -270,6 +283,12 @@ foreach ($oportunidadesPorEstagio as $ops) {
             <?php endforeach; ?>
         </section>
     <?php endif; ?>
+
+    <section class="fd-pipeline-reference-widgets">
+        <article class="fd-card"><div class="fd-card-header"><strong>Conversao por etapa</strong><span>Este mes</span></div><div class="fd-pipeline-conversion-bars"><?php $maiorEtapa=max(array_merge([1],array_map('count',$oportunidadesPorEstagio))); foreach($estagios as $indice=>$estagio): $qtd=count($oportunidadesPorEstagio[(int)$estagio['id']]??[]); ?><div style="--bar:<?= max(8,round(($qtd/$maiorEtapa)*100)) ?>%;--stage-color:<?= e($estagio['cor_hex']??'#7237df') ?>"><span><?= e($estagio['nome']) ?></span><i></i><b><?= $qtd ?></b></div><?php endforeach; ?></div><a href="<?= ($base ?? '') ?>/relatorio-conversao">Taxa geral de conversao: <?= $taxaConversao ?>%</a></article>
+        <article class="fd-card"><div class="fd-card-header"><strong>Insights do pipeline</strong></div><div class="fd-pipeline-insight"><span class="fd-reference-icon"><i class="ri-alarm-warning-line"></i></span><div><strong><?= count($followUps) ?> oportunidades possuem data prevista</strong><p>Revise os prazos para manter o forecast preciso.</p></div></div><div class="fd-pipeline-insight"><span class="fd-reference-icon"><i class="ri-funds-line"></i></span><div><strong>R$<?= number_format($totalValorPonderado,2,',','.') ?> em valor ponderado</strong><p>Priorize as oportunidades de maior probabilidade.</p></div></div></article>
+        <article class="fd-card"><div class="fd-card-header"><strong>Proximos follow-ups</strong></div><?php foreach(array_slice($followUps,0,3) as $follow): ?><div class="fd-pipeline-followup"><span class="fd-reference-icon"><i class="ri-chat-follow-up-line"></i></span><div><strong><?= e($follow['op']['titulo']??'Oportunidade') ?></strong><small><?= e($follow['estagio']['nome']??'Pipeline') ?></small></div><time><?= e(fd_format_date($follow['op']['data_prevista_fechamento'])) ?></time></div><?php endforeach; ?></article>
+    </section>
 
     <div class="fd-pipeline-report">
         <a href="/relatorio-conversao" class="fd-btn-secondary">

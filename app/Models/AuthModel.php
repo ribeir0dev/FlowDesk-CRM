@@ -10,12 +10,31 @@ require_once __DIR__ . '/../../config/db.php';
 class AuthModel
 {
     private PDO $pdo;
+    private array $columnCache = [];
     private const DEFAULT_PIPELINE_STAGES = [
         ['nome' => 'Lead', 'slug' => 'lead', 'ordem' => 1, 'cor_hex' => '#2563eb'],
         ['nome' => 'Proposta enviada', 'slug' => 'proposta_enviada', 'ordem' => 2, 'cor_hex' => '#0ea5e9'],
         ['nome' => 'Fechado (ganho)', 'slug' => 'fechado_ganho', 'ordem' => 3, 'cor_hex' => '#22c55e'],
         ['nome' => 'Perdido', 'slug' => 'perdido', 'ordem' => 4, 'cor_hex' => '#ef4444'],
     ];
+
+    private function hasUserColumn(string $column): bool
+    {
+        if (array_key_exists($column, $this->columnCache)) {
+            return $this->columnCache[$column];
+        }
+
+        $stmt = $this->pdo->prepare('
+            SELECT COUNT(*)
+            FROM information_schema.COLUMNS
+            WHERE TABLE_SCHEMA = DATABASE()
+              AND TABLE_NAME = \'usuarios\'
+              AND COLUMN_NAME = ?
+        ');
+        $stmt->execute([$column]);
+
+        return $this->columnCache[$column] = (bool) $stmt->fetchColumn();
+    }
 
     private function normalizePublicToken(string $value): string
     {
@@ -187,6 +206,25 @@ class AuthModel
         return $user ?: null;
     }
 
+    public function findUserById(int $userId): ?array
+    {
+        $socialColumns = [];
+        foreach (['instagram_url', 'behance_url', 'website_url'] as $column) {
+            $socialColumns[] = $this->hasUserColumn($column) ? $column : "NULL AS {$column}";
+        }
+
+        $stmt = $this->pdo->prepare('
+            SELECT id, nome, email, senha, foto_perfil, ' . implode(', ', $socialColumns) . '
+            FROM usuarios
+            WHERE id = ?
+            LIMIT 1
+        ');
+        $stmt->execute([$userId]);
+        $user = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        return $user ?: null;
+    }
+
     private function makeWorkspaceSlug(string $value): string
     {
         $slug = mb_strtolower(trim($value), 'UTF-8');
@@ -330,6 +368,54 @@ class AuthModel
 
         $stmt = $this->pdo->prepare($sql);
         return $stmt->execute($params);
+    }
+
+    public function updateUserPassword(int $userId, string $passwordHash): bool
+    {
+        $stmt = $this->pdo->prepare('
+            UPDATE usuarios
+            SET senha = ?, atualizado_em = NOW()
+            WHERE id = ?
+        ');
+
+        return $stmt->execute([$passwordHash, $userId]);
+    }
+
+    public function updateUserAvatar(int $userId, string $avatarPath): bool
+    {
+        $stmt = $this->pdo->prepare('
+            UPDATE usuarios
+            SET foto_perfil = ?, atualizado_em = NOW()
+            WHERE id = ?
+        ');
+
+        return $stmt->execute([$avatarPath, $userId]);
+    }
+
+    public function updateSocialLink(int $userId, string $network, ?string $url): bool
+    {
+        $columns = [
+            'instagram' => 'instagram_url',
+            'behance' => 'behance_url',
+            'website' => 'website_url',
+        ];
+
+        if (!isset($columns[$network])) {
+            return false;
+        }
+
+        $column = $columns[$network];
+        if (!$this->hasUserColumn($column)) {
+            return false;
+        }
+
+        $stmt = $this->pdo->prepare("
+            UPDATE usuarios
+            SET {$column} = ?, atualizado_em = NOW()
+            WHERE id = ?
+        ");
+
+        return $stmt->execute([$url, $userId]);
     }
 
 

@@ -1,29 +1,57 @@
-import { initThemeToggle } from './theme.js';
-import { initSidebar } from './sidebar.js';
-import { initMasks } from './masks.js';
-import { initFinanceiroCharts } from './financeiro-charts.js';
-
 const FLOWDESK_BASE = (window.FLOWDESK_BASE || '').replace(/\/$/, '');
+const FLOWDESK_CSRF_TOKEN = window.FLOWDESK_CSRF_TOKEN
+  || document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
+  || '';
 
 function fdUrl(path) {
   const normalizedPath = path.startsWith('/') ? path : `/${path}`;
   return `${FLOWDESK_BASE}${normalizedPath}`;
 }
 
+function initCsrfProtection() {
+  if (!FLOWDESK_CSRF_TOKEN) return;
+
+  const originalFetch = window.fetch?.bind(window);
+  if (originalFetch && !window.__flowdeskCsrfFetchWrapped) {
+    window.__flowdeskCsrfFetchWrapped = true;
+    window.fetch = (resource, options = {}) => {
+      const init = { ...options };
+      const method = String(init.method || 'GET').toUpperCase();
+
+      if (!['GET', 'HEAD', 'OPTIONS'].includes(method)) {
+        const headers = new Headers(init.headers || {});
+        headers.set('X-CSRF-Token', FLOWDESK_CSRF_TOKEN);
+        headers.set('X-Requested-With', 'XMLHttpRequest');
+        init.headers = headers;
+
+        if (init.body instanceof FormData && !init.body.has('csrf_token')) {
+          init.body.append('csrf_token', FLOWDESK_CSRF_TOKEN);
+        } else if (init.body instanceof URLSearchParams && !init.body.has('csrf_token')) {
+          init.body.append('csrf_token', FLOWDESK_CSRF_TOKEN);
+        }
+      }
+
+      return originalFetch(resource, init);
+    };
+  }
+
+  document.addEventListener('submit', (event) => {
+    const form = event.target;
+    if (!(form instanceof HTMLFormElement)) return;
+    if (String(form.method || 'GET').toUpperCase() !== 'POST') return;
+    if (form.querySelector('input[name="csrf_token"]')) return;
+
+    const input = document.createElement('input');
+    input.type = 'hidden';
+    input.name = 'csrf_token';
+    input.value = FLOWDESK_CSRF_TOKEN;
+    form.appendChild(input);
+  }, true);
+}
+
+initCsrfProtection();
+
 document.addEventListener('DOMContentLoaded', () => {
-  const safeInit = (label, fn) => {
-    try {
-      fn?.();
-    } catch (error) {
-      console.error(`FlowDesk init error: ${label}`, error);
-    }
-  };
-
-  safeInit('theme', initThemeToggle);
-  safeInit('sidebar', initSidebar);
-  safeInit('masks', initMasks);
-  safeInit('financeiro-charts', initFinanceiroCharts);
-
   const btnLogin = document.getElementById('btn-login');
   const btnCriar = document.getElementById('btn-criar');
   const formLogin = document.getElementById('form-login');

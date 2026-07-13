@@ -5,8 +5,9 @@ if (session_status() !== PHP_SESSION_ACTIVE) {
 }
 
 if (!isset($_SESSION['user_id'])) {
-    header('Location: /');
+    require_once __DIR__ . '/../Helpers/auth.php';
+    header('Location: ' . fd_base_path() . '/');
     exit;
 }
 
-require_once __DIR__ . '/../Views/layouts/app.php';
+require_once __DIR__ . '/../views/layouts/app.php';

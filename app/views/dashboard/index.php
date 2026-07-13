@@ -28,6 +28,7 @@ $novosClientesMes = $model->novosClientesMes($ano, $mes);
 
 $status_filtro = $_GET['status'] ?? 'todos';
 $tasksHoje = $model->tarefasPorStatus($status_filtro);
+$atividadesRecentes = $model->listarAtividadesRecentes(12);
 
 $hoje = new DateTime();
 $hospAtivas = $model->hospedagensAtivas($hoje);
@@ -382,6 +383,18 @@ function fdMoney(float $value): string
                 <span class="fd-kpi-note fd-trend-neutral">Baseado no mes <?= htmlspecialchars($mes_label) ?></span>
             </div>
         </article>
+
+        <article class="fd-card fd-kpi-card">
+            <div class="fd-kpi-top"><span class="fd-kpi-label"><span class="fd-kpi-icon fd-kpi-icon-blue"><i class="ri-scales-3-line"></i></span>Saldo do periodo</span></div>
+            <div class="fd-kpi-main"><h3 class="fd-kpi-value sensitive-value"><?= fdMoney((float) $totalEntradasMes - (float) $totalSaidasMes) ?></h3><span class="fd-kpi-trend <?= $totalEntradasMes >= $totalSaidasMes ? 'fd-trend-positive' : 'fd-trend-negative' ?>"><?= $totalEntradasMes >= $totalSaidasMes ? 'Positivo' : 'Negativo' ?></span></div>
+            <div class="fd-kpi-footer"><span class="fd-kpi-note fd-trend-neutral">Entradas menos saidas do mes</span></div>
+        </article>
+
+        <article class="fd-card fd-kpi-card">
+            <div class="fd-kpi-top"><span class="fd-kpi-label"><span class="fd-kpi-icon fd-kpi-icon-green"><i class="ri-server-line"></i></span>Hospedagens ativas</span></div>
+            <div class="fd-kpi-main"><h3 class="fd-kpi-value"><?= is_countable($hospAtivas) ? count($hospAtivas) : (int) $hospAtivas ?></h3><span class="fd-kpi-trend fd-trend-positive">Monitoradas</span></div>
+            <div class="fd-kpi-footer"><span class="fd-kpi-note fd-trend-neutral">Infraestruturas dentro da validade</span></div>
+        </article>
     </section>
 
     <section class="fd-dashboard-grid">
@@ -541,6 +554,40 @@ function fdMoney(float $value): string
                         </li>
                     <?php endforeach; ?>
                 </ul>
+            <?php endif; ?>
+        </article>
+
+        <article class="fd-card fd-dashboard-activity-card">
+            <div class="fd-card-header">
+                <div>
+                    <p class="fd-card-title">
+                        <span class="fd-section-icon">
+                            <i class="ri-history-line"></i>
+                        </span>
+                        Atividades recentes
+                    </p>
+                    <p class="fd-card-subtitle">Movimentos mais recentes do workspace</p>
+                </div>
+            </div>
+
+            <?php if (empty($atividadesRecentes)): ?>
+                <p class="fd-empty-copy">Nenhuma atividade registrada ainda.</p>
+            <?php else: ?>
+                <div class="fd-workspace-timeline">
+                    <?php foreach ($atividadesRecentes as $atividade): ?>
+                        <article class="fd-workspace-timeline-item">
+                            <span class="fd-workspace-timeline-dot"></span>
+                            <span class="fd-workspace-timeline-icon">
+                                <i class="<?= htmlspecialchars((string) $atividade['icone']) ?>"></i>
+                            </span>
+                            <div class="fd-workspace-timeline-copy">
+                                <strong><?= htmlspecialchars((string) $atividade['titulo']) ?></strong>
+                                <p><?= htmlspecialchars((string) $atividade['descricao']) ?></p>
+                                <small><?= htmlspecialchars(fd_relative_time((string) $atividade['data_evento'])) ?></small>
+                            </div>
+                        </article>
+                    <?php endforeach; ?>
+                </div>
             <?php endif; ?>
         </article>
     </section>

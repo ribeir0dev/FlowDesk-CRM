@@ -8,7 +8,7 @@
         </div>
         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Fechar"></button>
       </div>
-      <form action="<?= ($base ?? '') ?>/codigos/criar" method="post" class="fd-modal-form">
+      <form action="<?= ($base ?? '') ?>/codigos/criar" method="post" class="fd-modal-form" enctype="multipart/form-data">
         <input type="hidden" name="acao" value="criar">
         <div class="modal-body fd-modal-body">
           <div class="fd-settings-fields">
@@ -44,6 +44,11 @@
             <div class="fd-settings-field fd-settings-field-span-2">
               <label class="form-label small">Instrucoes de uso</label>
               <textarea name="instrucoes" rows="4" class="form-control" placeholder="Passo a passo ou observacoes de uso"></textarea>
+            </div>
+            <div class="fd-settings-field fd-settings-field-span-2">
+              <label class="form-label small">Imagem de preview</label>
+              <input type="file" name="preview_image" class="form-control" accept="image/png,image/jpeg,image/gif">
+              <p class="fd-text-muted fd-settings-help">Opcional. PNG, JPEG ou GIF ate 8MB. Quando enviada, ela substitui o snippet no card.</p>
             </div>
             <div class="fd-settings-field fd-settings-field-span-2">
               <label class="form-label small">Conteudo do codigo</label>

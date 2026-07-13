@@ -8,6 +8,7 @@ if (!isset($pdo) || !($pdo instanceof PDO)) {
     require __DIR__ . '/../../config/db.php';
 }
 require_once __DIR__ . '/../Helpers/auth.php';
+require_once __DIR__ . '/../Models/BillingModel.php';
 require_once __DIR__ . '/../Models/WorkspaceInviteModel.php';
 
 $inviteModel = new WorkspaceInviteModel($pdo);
@@ -47,7 +48,26 @@ function criarInvite(WorkspaceInviteModel $inviteModel): void
         exit;
     }
 
-    $invite = $inviteModel->criarInvite($email, $role, (int) ($_SESSION['user_id'] ?? 0));
+    $billingModel = new BillingModel($GLOBALS['pdo']);
+    $workspaceId = (int) (fd_current_workspace_id() ?? 0);
+    if (!$billingModel->acquireWorkspaceBillingLock($workspaceId)) {
+        header('Location: ' . fd_base_path() . '/configuracoes?invite=erro');
+        exit;
+    }
+
+    try {
+        $extraPending = $billingModel->countPendingInvites($workspaceId);
+        $gate = $billingModel->getResourceGate($workspaceId, 'users', 1, $extraPending);
+        if (!$gate['allowed']) {
+            $billingModel->releaseWorkspaceBillingLock($workspaceId);
+            header('Location: ' . fd_base_path() . '/configuracoes?invite=limit');
+            exit;
+        }
+
+        $invite = $inviteModel->criarInvite($email, $role, (int) ($_SESSION['user_id'] ?? 0));
+    } finally {
+        $billingModel->releaseWorkspaceBillingLock($workspaceId);
+    }
     if (!$invite) {
         header('Location: ' . fd_base_path() . '/configuracoes?invite=duplicado');
         exit;

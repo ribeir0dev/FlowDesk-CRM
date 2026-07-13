@@ -30,6 +30,32 @@ class Router
         $uri = $this->normalize($uri);
 
         $action = $this->routes[$method][$uri] ?? null;
+        $params = [];
+
+        if (!$action) {
+            foreach ($this->routes[$method] ?? [] as $route => $candidate) {
+                if (!str_contains($route, '{')) {
+                    continue;
+                }
+
+                $paramNames = [];
+                $pattern = preg_replace_callback('/\{([a-zA-Z_][a-zA-Z0-9_]*)\}/', function ($matches) use (&$paramNames) {
+                    $paramNames[] = $matches[1];
+                    return '___ROUTE_PARAM___';
+                }, $route);
+                $pattern = preg_quote($pattern, '#');
+                $pattern = str_replace('___ROUTE_PARAM___', '([^/]+)', $pattern);
+                $pattern = '#^' . $pattern . '$#';
+                if (!preg_match($pattern, $uri, $matches)) {
+                    continue;
+                }
+
+                array_shift($matches);
+                $params = array_combine($paramNames, array_map('rawurldecode', $matches)) ?: [];
+                $action = $candidate;
+                break;
+            }
+        }
 
         if (!$action) {
             http_response_code(404);
@@ -43,7 +69,7 @@ class Router
             exit;
         }
 
-        call_user_func($action);
+        call_user_func_array($action, array_values($params));
     }
 
     private function normalize(string $uri): string

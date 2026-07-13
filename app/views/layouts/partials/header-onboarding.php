@@ -3,6 +3,8 @@ if (session_status() !== PHP_SESSION_ACTIVE) {
     session_start();
 }
 
+require_once __DIR__ . '/../../../../config/csrf.php';
+
 $scriptName = $_SERVER['SCRIPT_NAME'] ?? '';
 $base = rtrim(str_replace('\\', '/', dirname($scriptName)), '/');
 if ($base === '/' || $base === '\\' || $base === '.') {
@@ -20,6 +22,7 @@ $userThemePreference = $_SESSION['user_theme'] ?? 'dark';
     <title><?= htmlspecialchars($pageTitle) ?> | FlowDesk</title>
     <meta name="theme-color" content="#020617">
     <meta name="description" content="FlowDesk CRM - onboarding inicial do workspace.">
+    <meta name="csrf-token" content="<?= htmlspecialchars(csrf_token(), ENT_QUOTES, 'UTF-8') ?>">
 
     <link rel="icon" href="<?= $base ?>/favicon.ico">
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -36,6 +39,7 @@ $userThemePreference = $_SESSION['user_theme'] ?? 'dark';
             document.documentElement.setAttribute('data-theme', savedTheme);
         })();
         window.FLOWDESK_BASE = <?= json_encode($base, JSON_UNESCAPED_SLASHES) ?>;
+        window.FLOWDESK_CSRF_TOKEN = <?= json_encode(csrf_token(), JSON_UNESCAPED_SLASHES) ?>;
     </script>
 
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>

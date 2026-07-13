@@ -3,346 +3,181 @@ if (session_status() !== PHP_SESSION_ACTIVE) {
     session_start();
 }
 
-require_once __DIR__ . '/../../../../config/db.php';
-
-$workspaceId = fd_current_workspace_id() ?? 0;
-$stmtCli = $pdo->prepare('SELECT id, nome FROM clientes WHERE workspace_id = ? ORDER BY nome ASC');
-$stmtCli->execute([$workspaceId]);
-$listaClientes = $stmtCli->fetchAll(PDO::FETCH_ASSOC);
+$listaClientes = $listaClientes ?? [];
+$categoriasFinanceiras = $categoriasFinanceiras ?? [];
 ?>
 
-<div class="modal fade" id="modalNovaEntrada" tabindex="-1" aria-labelledby="modalNovaEntradaLabel" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered modal-lg">
+<div class="modal fade fd-fin-modal" id="modalContaReceber" tabindex="-1" aria-labelledby="modalContaReceberLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
-            <form method="post" action="<?= ($base ?? '') ?>/financeiro/acao" id="form-nova-entrada">
+            <form method="post" action="<?= ($base ?? '') ?>/financeiro/acao">
                 <input type="hidden" name="acao" value="adicionar_entrada">
+                <input type="hidden" name="aba" value="receber">
+                <input type="hidden" name="valor_recebido" value="0">
 
                 <div class="modal-header">
-                    <h5 class="modal-title" id="modalNovaEntradaLabel">Adicionar entrada</h5>
+                    <h5 class="modal-title" id="modalContaReceberLabel">Nova conta a receber</h5>
                     <button type="button" class="btn btn-close-custom" data-bs-dismiss="modal" aria-label="Fechar">
                         <i class="ri-close-line"></i>
                     </button>
                 </div>
 
                 <div class="modal-body">
-                    <div class="row g-3">
-                        <div class="col-md-4">
-                            <label class="form-label small">Data</label>
-                            <div class="fd-date-picker" x-data="flowdeskDatePicker('<?= date('Y-m-d') ?>', { defaultToToday: true, placeholder: 'Selecionar data' })" @keydown.escape.window="close()">
-                                <input type="date" name="data_lancamento" class="fd-date-picker-native" x-model="selectedValue" required>
-                                <button type="button" class="fd-date-picker-trigger" @click="toggle()" :aria-expanded="open.toString()">
-                                    <span class="fd-date-picker-trigger-icon"><i class="ri-calendar-line"></i></span>
-                                    <span class="fd-date-picker-trigger-copy">
-                                        <span class="fd-date-picker-trigger-label">Lancamento</span>
-                                        <strong x-text="triggerLabel"></strong>
-                                    </span>
-                                    <i class="ri-arrow-down-s-line fd-date-picker-trigger-arrow"></i>
-                                </button>
-                                <div class="fd-date-picker-panel" x-show="open" x-cloak x-transition.opacity.scale.origin.top.left @click.outside="close()">
-                                    <div class="fd-date-picker-head">
-                                        <button type="button" class="fd-date-picker-nav" @click="prevMonth()"><i class="ri-arrow-left-s-line"></i></button>
-                                        <div class="fd-date-picker-head-copy">
-                                            <span class="fd-date-picker-head-label">Selecione a data</span>
-                                            <strong x-text="headerLabel"></strong>
-                                        </div>
-                                        <button type="button" class="fd-date-picker-nav" @click="nextMonth()"><i class="ri-arrow-right-s-line"></i></button>
-                                    </div>
-                                    <div class="fd-date-picker-weekdays">
-                                        <template x-for="weekday in weekdays" :key="weekday"><span class="fd-date-picker-weekday" x-text="weekday"></span></template>
-                                    </div>
-                                    <div class="fd-date-picker-days">
-                                        <template x-for="item in days()" :key="item.key">
-                                            <div>
-                                                <template x-if="item.empty"><span class="fd-date-picker-day is-empty"></span></template>
-                                                <template x-if="!item.empty">
-                                                    <button type="button" class="fd-date-picker-day" :class="{ 'is-today': isToday(item.day), 'is-selected': isSelected(item.day) }" @click="selectDay(item.day)" x-text="item.day"></button>
-                                                </template>
-                                            </div>
-                                        </template>
-                                    </div>
-                                    <div class="fd-date-picker-footer">
-                                        <button type="button" class="fd-date-picker-link" @click="clear()">Limpar</button>
-                                        <button type="button" class="fd-date-picker-link" @click="selectToday()">Hoje</button>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="col-md-8">
-                            <label class="form-label small">Descricao</label>
-                            <input type="text" name="descricao" class="form-control" placeholder="Ex: Site institucional para cliente X" required>
-                        </div>
-
-                        <div class="col-12">
-                            <label class="form-label small">Cliente (opcional)</label>
-                            <select name="cliente_id" class="form-select form-select-sm">
+                    <div class="fd-fin-modal-grid">
+                        <label class="fd-fin-modal-field is-full">
+                            <span>Cliente</span>
+                            <select name="cliente_id" class="form-select">
                                 <option value="">Sem cliente vinculado</option>
                                 <?php foreach ($listaClientes as $cliente): ?>
-                                    <option value="<?= (int) $cliente['id'] ?>"><?= htmlspecialchars($cliente['nome']) ?></option>
+                                    <option value="<?= (int) $cliente['id'] ?>"><?= e($cliente['nome']) ?></option>
                                 <?php endforeach; ?>
                             </select>
-                        </div>
+                        </label>
 
-                        <div class="col-md-6">
-                            <label class="form-label small">Servico</label>
-                            <select name="servico" class="form-select" required>
-                                <option value="landing_page">Landing page</option>
-                                <option value="website">Website</option>
-                                <option value="configuracao">Configuracao</option>
-                                <option value="alteracao">Alteracao</option>
-                                <option value="design">Design</option>
-                                <option value="salario">Salario</option>
-                                <option value="outro">Outro</option>
+                        <label class="fd-fin-modal-field is-full">
+                            <span>Descricao</span>
+                            <input type="text" name="descricao" class="form-control" placeholder="Ex: Landing Page, mensalidade, consultoia" required>
+                        </label>
+
+                        <label class="fd-fin-modal-field">
+                            <span>Valor</span>
+                            <input type="text" name="valor_a_receber" class="form-control js-money" placeholder="00,00" required>
+                        </label>
+
+                        <label class="fd-fin-modal-field">
+                            <span>Moeda</span>
+                            <select class="form-select" name="moeda">
+                                <option value="BRL">BRL</option>
+                                <option value="USD">USD</option>
+                                <option value="EUR">EUR</option>
                             </select>
+                        </label>
+
+                        <label class="fd-fin-modal-field">
+                            <span>Vencimento</span>
+                            <input type="date" name="data_lancamento" class="form-control" value="<?= date('Y-m-d') ?>" required>
+                        </label>
+
+                        <div class="fd-fin-modal-field is-full">
+                            <span>Modo de Pagamento</span>
+                            <div class="fd-fin-choice-box">
+                                <input type="radio" class="btn-check" name="tipo_pagamento" id="receberModoVista" value="integral" checked>
+                                <label for="receberModoVista"><i class="ri-file-close-line"></i> A Vista</label>
+
+                                <input type="radio" class="btn-check" name="tipo_pagamento" id="receberModoParcelado" value="parcelado">
+                                <label for="receberModoParcelado"><i class="ri-file-close-line"></i> Parcelado</label>
+
+                                <input type="radio" class="btn-check" name="tipo_pagamento" id="receberModoRecorrente" value="recorrente">
+                                <label for="receberModoRecorrente"><i class="ri-file-close-line"></i> Recorrente</label>
+                            </div>
                         </div>
 
-                        <div class="col-md-3">
-                            <label class="form-label small">Tipo de pagamento</label>
-                            <select name="tipo_pagamento" class="form-select" required>
-                                <option value="50_50">50/50</option>
-                                <option value="integral" selected>Integral</option>
+                        <div class="fd-fin-modal-field is-full">
+                            <span>Status</span>
+                            <div class="fd-fin-choice-box">
+                                <input type="radio" class="btn-check" name="status_pagamento" id="receberStatusPendente" value="pendente" checked>
+                                <label for="receberStatusPendente"><i class="ri-file-close-line"></i> Pendente</label>
+
+                                <input type="radio" class="btn-check" name="status_pagamento" id="receberStatusParcial" value="parcial">
+                                <label for="receberStatusParcial"><i class="ri-file-close-line"></i> Parcial</label>
+
+                                <input type="radio" class="btn-check" name="status_pagamento" id="receberStatusPago" value="pago">
+                                <label for="receberStatusPago"><i class="ri-file-close-line"></i> Pago</label>
+                            </div>
+                        </div>
+
+                        <label class="fd-fin-modal-field is-full">
+                            <span>Categoria</span>
+                            <select name="categoria_financeira" class="form-select">
+                                <option value="outro">Sem Categoria</option>
+                                <?php foreach ($categoriasFinanceiras as $categoria): ?>
+                                    <option value="<?= e($categoria['nome']) ?>"><?= e($categoria['nome']) ?></option>
+                                <?php endforeach; ?>
                             </select>
-                        </div>
+                            <input type="hidden" name="servico" value="outro">
+                        </label>
 
-                        <div class="col-md-3">
-                            <label class="form-label small">Forma de pagamento</label>
-                            <select name="forma_pagamento" class="form-select" required>
-                                <option value="pix" selected>PIX</option>
-                                <option value="boleto">Boleto</option>
-                                <option value="cartao">Cartao</option>
-                                <option value="dinheiro">Dinheiro</option>
-                                <option value="outro">Outro</option>
-                            </select>
-                        </div>
-
-                        <div class="col-md-6">
-                            <label class="form-label small">Valor a receber</label>
-                            <input type="text" min="0" name="valor_a_receber" class="form-control js-money" placeholder="0,00" required>
-                        </div>
-
-                        <div class="col-md-6">
-                            <label class="form-label small">Valor ja recebido</label>
-                            <input type="text" min="0" name="valor_recebido" class="form-control js-money" placeholder="0,00" value="0">
-                        </div>
-
-                        <div class="col-12">
-                            <label class="form-label small">Observacoes (opcional)</label>
-                            <textarea name="observacoes" class="form-control" rows="3" placeholder="Detalhes sobre esta entrada, condicoes de pagamento e observacoes uteis."></textarea>
-                        </div>
+                        <label class="fd-fin-modal-field is-full">
+                            <span>Observacoes</span>
+                            <input type="text" name="observacoes" class="form-control" placeholder="Adiciones observacoes">
+                        </label>
                     </div>
                 </div>
 
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="submit" class="btn btn-primary">Salvar entrada</button>
+                    <button type="button" class="btn fd-fin-modal-cancel" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn fd-fin-modal-submit">Lancar</button>
                 </div>
             </form>
         </div>
     </div>
 </div>
 
-<div class="modal fade" id="modalNovaSaida" tabindex="-1" aria-labelledby="modalNovaSaidaLabel" aria-hidden="true">
+<div class="modal fade fd-fin-modal" id="modalRegistrarPagamento" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
-            <form method="post" action="<?= ($base ?? '') ?>/financeiro/acao" id="form-nova-saida">
-                <input type="hidden" name="acao" value="adicionar_saida">
-
+            <form method="post" action="<?= ($base ?? '') ?>/financeiro/acao">
+                <input type="hidden" name="acao" value="registrar_pagamento_entrada" data-payment-action>
+                <input type="hidden" name="aba" value="receber" data-payment-tab>
+                <input type="hidden" name="id" value="" data-payment-id>
                 <div class="modal-header">
-                    <h5 class="modal-title" id="modalNovaSaidaLabel">Adicionar saida</h5>
-                    <button type="button" class="btn btn-close-custom" data-bs-dismiss="modal" aria-label="Fechar">
-                        <i class="ri-close-line"></i>
-                    </button>
+                    <h5 class="modal-title">Registrar pagamento</h5>
+                    <button type="button" class="btn btn-close-custom" data-bs-dismiss="modal" aria-label="Fechar"><i class="ri-close-line"></i></button>
                 </div>
-
                 <div class="modal-body">
-                    <div class="row g-3">
-                        <div class="col-md-4">
-                            <label class="form-label small">Data</label>
-                            <div class="fd-date-picker" x-data="flowdeskDatePicker('<?= date('Y-m-d') ?>', { defaultToToday: true, placeholder: 'Selecionar data' })" @keydown.escape.window="close()">
-                                <input type="date" name="data_lancamento" class="fd-date-picker-native" x-model="selectedValue" required>
-                                <button type="button" class="fd-date-picker-trigger" @click="toggle()" :aria-expanded="open.toString()">
-                                    <span class="fd-date-picker-trigger-icon"><i class="ri-calendar-line"></i></span>
-                                    <span class="fd-date-picker-trigger-copy">
-                                        <span class="fd-date-picker-trigger-label">Lancamento</span>
-                                        <strong x-text="triggerLabel"></strong>
-                                    </span>
-                                    <i class="ri-arrow-down-s-line fd-date-picker-trigger-arrow"></i>
-                                </button>
-                                <div class="fd-date-picker-panel" x-show="open" x-cloak x-transition.opacity.scale.origin.top.left @click.outside="close()">
-                                    <div class="fd-date-picker-head">
-                                        <button type="button" class="fd-date-picker-nav" @click="prevMonth()"><i class="ri-arrow-left-s-line"></i></button>
-                                        <div class="fd-date-picker-head-copy">
-                                            <span class="fd-date-picker-head-label">Selecione a data</span>
-                                            <strong x-text="headerLabel"></strong>
-                                        </div>
-                                        <button type="button" class="fd-date-picker-nav" @click="nextMonth()"><i class="ri-arrow-right-s-line"></i></button>
-                                    </div>
-                                    <div class="fd-date-picker-weekdays">
-                                        <template x-for="weekday in weekdays" :key="weekday"><span class="fd-date-picker-weekday" x-text="weekday"></span></template>
-                                    </div>
-                                    <div class="fd-date-picker-days">
-                                        <template x-for="item in days()" :key="item.key">
-                                            <div>
-                                                <template x-if="item.empty"><span class="fd-date-picker-day is-empty"></span></template>
-                                                <template x-if="!item.empty">
-                                                    <button type="button" class="fd-date-picker-day" :class="{ 'is-today': isToday(item.day), 'is-selected': isSelected(item.day) }" @click="selectDay(item.day)" x-text="item.day"></button>
-                                                </template>
-                                            </div>
-                                        </template>
-                                    </div>
-                                    <div class="fd-date-picker-footer">
-                                        <button type="button" class="fd-date-picker-link" @click="clear()">Limpar</button>
-                                        <button type="button" class="fd-date-picker-link" @click="selectToday()">Hoje</button>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="col-md-8">
-                            <label class="form-label small">Descricao</label>
-                            <input type="text" name="descricao" class="form-control" placeholder="Ex: Almoco com cliente, ferramenta, deslocamento, etc." required>
-                        </div>
-
-                        <div class="col-md-6">
-                            <label class="form-label small">Tipo de gasto</label>
-                            <select name="tipo" class="form-select" required>
-                                <option value="mercado">Mercado</option>
-                                <option value="lanche">Lanche</option>
-                                <option value="almoco">Almoco</option>
-                                <option value="pagamentos">Pagamentos</option>
-                                <option value="retiradas">Retiradas</option>
-                                <option value="outro">Outro</option>
-                            </select>
-                        </div>
-
-                        <div class="col-md-6">
-                            <label class="form-label small">Valor</label>
-                            <input type="text" min="0" name="valor" class="form-control js-money" placeholder="0,00" required>
-                        </div>
-
-                        <div class="col-12">
-                            <label class="form-label small">Observacoes (opcional)</label>
-                            <textarea name="observacoes" class="form-control" rows="3" placeholder="Categoria detalhada, contexto da saida e forma de pagamento."></textarea>
-                        </div>
+                    <div class="fd-fin-modal-grid">
+                        <p class="fd-card-subtitle is-full" data-payment-title></p>
+                        <label class="fd-fin-modal-field is-full">
+                            <span>Valor pago</span>
+                            <input type="text" name="valor_pago" class="form-control js-money" placeholder="00,00" required data-payment-value>
+                        </label>
                     </div>
                 </div>
-
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="submit" class="btn btn-primary">Salvar saida</button>
+                    <button type="button" class="btn fd-fin-modal-cancel" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn fd-fin-modal-submit">Registrar</button>
                 </div>
             </form>
         </div>
     </div>
 </div>
 
-<div class="modal fade" id="modalGastoFixo" tabindex="-1" aria-labelledby="modalGastoFixoLabel" aria-hidden="true">
+<div class="modal fade fd-fin-modal" id="modalFinanceiroCategorias" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
-            <form method="post" action="<?= ($base ?? '') ?>/financeiro/acao" id="form-gasto-fixo">
-                <input type="hidden" name="acao" value="adicionar_fixo">
-
+            <form method="post" action="<?= ($base ?? '') ?>/financeiro/acao">
+                <input type="hidden" name="acao" value="criar_categoria">
                 <div class="modal-header">
-                    <h5 class="modal-title" id="modalGastoFixoLabel">Adicionar gasto fixo</h5>
-                    <button type="button" class="btn btn-close-custom" data-bs-dismiss="modal" aria-label="Fechar">
-                        <i class="ri-close-line"></i>
-                    </button>
+                    <h5 class="modal-title">Categorias financeiras</h5>
+                    <button type="button" class="btn btn-close-custom" data-bs-dismiss="modal" aria-label="Fechar"><i class="ri-close-line"></i></button>
                 </div>
-
                 <div class="modal-body">
-                    <div class="row g-3">
-                        <div class="col-12">
-                            <label class="form-label small">Tipo de gasto</label>
-                            <input type="text" name="tipo_gasto" class="form-control" placeholder="Ex: Hospedagem, internet, aluguel" required>
-                        </div>
-
-                        <div class="col-md-6">
-                            <label class="form-label small">Valor</label>
-                            <input type="text" min="0" name="valor" class="form-control js-money" placeholder="0,00" required>
-                            <div class="form-text small">
-                                Se for parcelado, este e o valor de <strong>cada parcela</strong>.
+                    <div class="fd-fin-modal-grid">
+                        <label class="fd-fin-modal-field is-full">
+                            <span>Nova categoria</span>
+                            <input type="text" name="nome" class="form-control" placeholder="Digite o nome e pressione Enter" required>
+                        </label>
+                        <div class="fd-fin-modal-field is-full">
+                            <span>Cor</span>
+                            <div class="fd-fin-color-picker">
+                                <?php foreach (['#5690D9', '#56D96E', '#D95656', '#FACC15', '#A855F7', '#F97316'] as $index => $color): ?>
+                                    <label style="--cat-color: <?= e($color) ?>">
+                                        <input type="radio" name="cor" value="<?= e($color) ?>" <?= $index === 0 ? 'checked' : '' ?>>
+                                        <span></span>
+                                    </label>
+                                <?php endforeach; ?>
                             </div>
                         </div>
-
-                        <div class="col-md-6">
-                            <label class="form-label small">Data de inicio</label>
-                            <div class="fd-date-picker" x-data="flowdeskDatePicker('<?= date('Y-m-d') ?>', { defaultToToday: true, placeholder: 'Selecionar data' })" @keydown.escape.window="close()">
-                                <input type="date" name="data_inicio" class="fd-date-picker-native" x-model="selectedValue" required>
-                                <button type="button" class="fd-date-picker-trigger" @click="toggle()" :aria-expanded="open.toString()">
-                                    <span class="fd-date-picker-trigger-icon"><i class="ri-calendar-line"></i></span>
-                                    <span class="fd-date-picker-trigger-copy">
-                                        <span class="fd-date-picker-trigger-label">Inicio</span>
-                                        <strong x-text="triggerLabel"></strong>
-                                    </span>
-                                    <i class="ri-arrow-down-s-line fd-date-picker-trigger-arrow"></i>
-                                </button>
-                                <div class="fd-date-picker-panel" x-show="open" x-cloak x-transition.opacity.scale.origin.top.left @click.outside="close()">
-                                    <div class="fd-date-picker-head">
-                                        <button type="button" class="fd-date-picker-nav" @click="prevMonth()"><i class="ri-arrow-left-s-line"></i></button>
-                                        <div class="fd-date-picker-head-copy">
-                                            <span class="fd-date-picker-head-label">Selecione a data</span>
-                                            <strong x-text="headerLabel"></strong>
-                                        </div>
-                                        <button type="button" class="fd-date-picker-nav" @click="nextMonth()"><i class="ri-arrow-right-s-line"></i></button>
-                                    </div>
-                                    <div class="fd-date-picker-weekdays">
-                                        <template x-for="weekday in weekdays" :key="weekday"><span class="fd-date-picker-weekday" x-text="weekday"></span></template>
-                                    </div>
-                                    <div class="fd-date-picker-days">
-                                        <template x-for="item in days()" :key="item.key">
-                                            <div>
-                                                <template x-if="item.empty"><span class="fd-date-picker-day is-empty"></span></template>
-                                                <template x-if="!item.empty">
-                                                    <button type="button" class="fd-date-picker-day" :class="{ 'is-today': isToday(item.day), 'is-selected': isSelected(item.day) }" @click="selectDay(item.day)" x-text="item.day"></button>
-                                                </template>
-                                            </div>
-                                        </template>
-                                    </div>
-                                    <div class="fd-date-picker-footer">
-                                        <button type="button" class="fd-date-picker-link" @click="clear()">Limpar</button>
-                                        <button type="button" class="fd-date-picker-link" @click="selectToday()">Hoje</button>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="col-12">
-                            <div class="form-check">
-                                <input class="form-check-input" type="checkbox" value="1" id="ehParcelado" name="eh_parcelado">
-                                <label class="form-check-label small" for="ehParcelado">
-                                    Este gasto e parcelado
-                                </label>
-                            </div>
-                        </div>
-
-                        <div class="col-md-6 parcelas-field d-none">
-                            <label class="form-label small">Quantidade total de parcelas</label>
-                            <select name="parcelas_totais" class="form-select form-select-sm">
-                                <?php for ($i = 1; $i <= 24; $i++): ?>
-                                    <option value="<?= $i ?>"><?= $i ?></option>
-                                <?php endfor; ?>
-                            </select>
-                        </div>
-
-                        <div class="col-md-6 parcelas-field d-none">
-                            <label class="form-label small">Parcelas restantes</label>
-                            <select name="parcelas_restantes" class="form-select form-select-sm">
-                                <?php for ($i = 1; $i <= 24; $i++): ?>
-                                    <option value="<?= $i ?>"><?= $i ?></option>
-                                <?php endfor; ?>
-                            </select>
-                        </div>
-
-                        <div class="col-12">
-                            <label class="form-label small">Observacoes (opcional)</label>
-                            <textarea name="observacoes" class="form-control" rows="3" placeholder="Detalhes adicionais sobre este gasto fixo."></textarea>
+                        <div class="fd-fin-category-list is-full">
+                            <?php foreach ($categoriasFinanceiras as $categoria): ?>
+                                <span><i style="background: <?= e($categoria['cor'] ?? '#5690D9') ?>"></i><?= e($categoria['nome']) ?></span>
+                            <?php endforeach; ?>
                         </div>
                     </div>
                 </div>
-
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="submit" class="btn btn-primary">Salvar gasto fixo</button>
+                    <button type="button" class="btn fd-fin-modal-cancel" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn fd-fin-modal-submit">Salvar categoria</button>
                 </div>
             </form>
         </div>
@@ -350,18 +185,161 @@ $listaClientes = $stmtCli->fetchAll(PDO::FETCH_ASSOC);
 </div>
 
 <script>
-document.addEventListener('DOMContentLoaded', function () {
-    const chk = document.getElementById('ehParcelado');
-    const fields = document.querySelectorAll('.parcelas-field');
-    if (!chk) return;
+document.addEventListener('DOMContentLoaded', () => {
+  ['modalContaReceber', 'modalContaPagar'].forEach((id) => {
+    const modal = document.getElementById(id);
+    modal?.addEventListener('show.bs.modal', (event) => {
+      const isEdit = event.relatedTarget?.classList?.contains('js-fin-edit-entrada') || event.relatedTarget?.classList?.contains('js-fin-edit-saida');
+      if (isEdit) return;
+      const form = modal.querySelector('form');
+      form?.reset();
+      form?.querySelector('input[name="id"]')?.remove();
+      const action = form?.querySelector('input[name="acao"]');
+      if (action) action.value = id === 'modalContaPagar' ? 'adicionar_saida' : 'adicionar_entrada';
+    });
+  });
 
-    function toggleParcelas() {
-        fields.forEach((field) => {
-            field.classList.toggle('d-none', !chk.checked);
-        });
+  const paymentModal = document.getElementById('modalRegistrarPagamento');
+  paymentModal?.addEventListener('show.bs.modal', (event) => {
+    const btn = event.relatedTarget;
+    const kind = btn?.dataset.kind || 'entrada';
+    paymentModal.querySelector('[data-payment-action]').value = kind === 'saida' ? 'registrar_pagamento_saida' : 'registrar_pagamento_entrada';
+    paymentModal.querySelector('[data-payment-tab]').value = kind === 'saida' ? 'pagar' : 'receber';
+    paymentModal.querySelector('[data-payment-id]').value = btn?.dataset.id || '';
+    paymentModal.querySelector('[data-payment-title]').textContent = btn?.dataset.title || '';
+    const saldo = Number(btn?.dataset.saldo || 0);
+    paymentModal.querySelector('[data-payment-value]').value = saldo > 0 ? saldo.toFixed(2).replace('.', ',') : '';
+  });
+
+  const fillForm = (form, data, type) => {
+    if (!form || !data) return;
+    let id = form.querySelector('input[name="id"]');
+    if (!id) {
+      id = document.createElement('input');
+      id.type = 'hidden';
+      id.name = 'id';
+      form.appendChild(id);
     }
+    id.value = data.id || '';
+    form.querySelector('input[name="acao"]').value = type === 'saida' ? 'salvar_saida' : 'salvar_entrada';
+    Object.entries({
+      cliente_id: data.cliente_id || '',
+      favorecido: data.favorecido || data.favorecido_label || '',
+      descricao: data.descricao || '',
+      valor_a_receber: data.valor_a_receber || '',
+      valor: data.valor || '',
+      moeda: data.moeda || 'BRL',
+      data_lancamento: data.data_lancamento || '',
+      servico: data.categoria_financeira || data.servico || 'outro',
+      categoria_financeira: data.categoria_financeira || data.tipo || '',
+      observacoes: data.observacoes || ''
+    }).forEach(([name, value]) => {
+      const field = form.querySelector(`[name="${name}"]`);
+      if (field) field.value = String(value).replace('.', ',');
+    });
+  };
 
-    chk.addEventListener('change', toggleParcelas);
-    toggleParcelas();
+  document.querySelectorAll('.js-fin-edit-entrada').forEach((button) => {
+    button.addEventListener('click', () => fillForm(document.querySelector('#modalContaReceber form'), JSON.parse(button.dataset.record || '{}'), 'entrada'));
+  });
+  document.querySelectorAll('.js-fin-edit-saida').forEach((button) => {
+    button.addEventListener('click', () => fillForm(document.querySelector('#modalContaPagar form'), JSON.parse(button.dataset.record || '{}'), 'saida'));
+  });
 });
 </script>
+
+<div class="modal fade fd-fin-modal" id="modalContaPagar" tabindex="-1" aria-labelledby="modalContaPagarLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <form method="post" action="<?= ($base ?? '') ?>/financeiro/acao">
+                <input type="hidden" name="acao" value="adicionar_saida">
+                <input type="hidden" name="aba" value="pagar">
+
+                <div class="modal-header">
+                    <h5 class="modal-title" id="modalContaPagarLabel">Nova conta a pagar</h5>
+                    <button type="button" class="btn btn-close-custom" data-bs-dismiss="modal" aria-label="Fechar">
+                        <i class="ri-close-line"></i>
+                    </button>
+                </div>
+
+                <div class="modal-body">
+                    <div class="fd-fin-modal-grid">
+                        <label class="fd-fin-modal-field is-full">
+                            <span>Cliente</span>
+                            <input type="text" name="favorecido" class="form-control" placeholder="Sem cliente vinculado">
+                        </label>
+
+                        <label class="fd-fin-modal-field is-full">
+                            <span>Descricao</span>
+                            <input type="text" name="descricao" class="form-control" placeholder="Ex: Landing Page, mensalidade, consultoia" required>
+                        </label>
+
+                        <label class="fd-fin-modal-field">
+                            <span>Valor</span>
+                            <input type="text" name="valor" class="form-control js-money" placeholder="00,00" required>
+                        </label>
+
+                        <label class="fd-fin-modal-field">
+                            <span>Moeda</span>
+                            <select class="form-select" name="moeda">
+                                <option value="BRL">BRL</option>
+                                <option value="USD">USD</option>
+                                <option value="EUR">EUR</option>
+                            </select>
+                        </label>
+
+                        <label class="fd-fin-modal-field">
+                            <span>Vencimento</span>
+                            <input type="date" name="data_lancamento" class="form-control" value="<?= date('Y-m-d') ?>" required>
+                        </label>
+
+                        <div class="fd-fin-modal-field is-full">
+                            <span>Tipo de Despesa</span>
+                            <div class="fd-fin-choice-box fd-fin-choice-box-2">
+                                <input type="radio" class="btn-check" name="tipo" id="pagarTipoAvulsa" value="operacional" checked>
+                                <label for="pagarTipoAvulsa"><i class="ri-file-close-line"></i> Avulsa</label>
+
+                                <input type="radio" class="btn-check" name="tipo" id="pagarTipoRecorrente" value="recorrente">
+                                <label for="pagarTipoRecorrente"><i class="ri-file-close-line"></i> Recorrente</label>
+                            </div>
+                        </div>
+
+                        <div class="fd-fin-modal-field is-full">
+                            <span>Status</span>
+                            <div class="fd-fin-choice-box">
+                                <input type="radio" class="btn-check" name="status_pagamento" id="pagarStatusPendente" value="pendente" checked>
+                                <label for="pagarStatusPendente"><i class="ri-file-close-line"></i> Pendente</label>
+
+                                <input type="radio" class="btn-check" name="status_pagamento" id="pagarStatusParcial" value="parcial">
+                                <label for="pagarStatusParcial"><i class="ri-file-close-line"></i> Parcial</label>
+
+                                <input type="radio" class="btn-check" name="status_pagamento" id="pagarStatusPago" value="pago">
+                                <label for="pagarStatusPago"><i class="ri-file-close-line"></i> Pago</label>
+                            </div>
+                        </div>
+
+                        <label class="fd-fin-modal-field is-full">
+                            <span>Categoria</span>
+                            <select name="categoria_financeira" class="form-select">
+                                <option value="">Sem Categoria</option>
+                                <?php foreach ($categoriasFinanceiras as $categoria): ?>
+                                    <option value="<?= e($categoria['nome']) ?>"><?= e($categoria['nome']) ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </label>
+
+                        <label class="fd-fin-modal-field is-full">
+                            <span>Observacoes</span>
+                            <input type="text" name="observacoes" class="form-control" placeholder="Adiciones observacoes">
+                        </label>
+                    </div>
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" class="btn fd-fin-modal-cancel" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn fd-fin-modal-submit">Lancar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>

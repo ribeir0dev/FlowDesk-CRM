@@ -1,0 +1,17 @@
+.env
+.env.*
+!.env.example
+
+node_modules/
+
+uploads/
+public/uploads/
+
+storage/logs/*.log
+!storage/logs/.gitkeep
+
+flowdesk-deploy.zip
+*.zip
+
+tmp_*.php
+tmp_*.txt

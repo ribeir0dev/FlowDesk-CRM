@@ -91,14 +91,24 @@ class ClienteModel
 
     public function buscarBloco(int $clienteId, string $slug): ?array
     {
+        if (!$this->viewerHasLinkedClient()) {
+            return null;
+        }
+
         $sql = '
             SELECT titulo, conteudo, compartilhado
             FROM cliente_blocos
             WHERE cliente_id = ? AND slug = ? AND workspace_id = ?
-            LIMIT 1
         ';
+        $params = [$clienteId, $slug, $this->currentWorkspaceId()];
+        if ($this->viewerClienteId() !== null) {
+            $sql .= ' AND cliente_id = ?';
+            $params[] = $this->viewerClienteId();
+        }
+
+        $sql .= ' LIMIT 1';
         $stmt = $this->pdo->prepare($sql);
-        $stmt->execute([$clienteId, $slug, $this->currentWorkspaceId()]);
+        $stmt->execute($params);
         $bloco = $stmt->fetch(PDO::FETCH_ASSOC);
 
         return $bloco ?: null;
@@ -141,8 +151,14 @@ class ClienteModel
           FROM cliente_blocos
           WHERE cliente_id = ? AND workspace_id = ?
         ";
+        $params = [$clienteId, $this->currentWorkspaceId()];
+        if ($this->viewerClienteId() !== null) {
+            $sql .= ' AND cliente_id = ?';
+            $params[] = $this->viewerClienteId();
+        }
+
         $stmt = $this->pdo->prepare($sql);
-        $stmt->execute([$clienteId, $this->currentWorkspaceId()]);
+        $stmt->execute($params);
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 
@@ -257,6 +273,26 @@ class ClienteModel
         $cliente = $stmt->fetch(PDO::FETCH_ASSOC);
 
         return $cliente ?: null;
+    }
+
+    public function resumoGeral(): array
+    {
+        $workspaceId = $this->currentWorkspaceId();
+        $stmt = $this->pdo->prepare("
+            SELECT
+              (SELECT COUNT(*) FROM clientes c WHERE c.workspace_id = ?) AS total_clientes,
+              (SELECT COUNT(*) FROM clientes c WHERE c.workspace_id = ? AND LOWER(COALESCE(c.status, '')) = 'ativo') AS clientes_ativos,
+              COALESCE((SELECT SUM(fe.valor_recebido) FROM financeiro_entradas fe WHERE fe.workspace_id = ?), 0) AS receita_gerada,
+              (SELECT COUNT(*) FROM orcamentos o WHERE o.workspace_id = ? AND LOWER(COALESCE(o.status, '')) IN ('aguardando', 'aguardando aprovacao', 'aguardando aprovação', 'enviado', 'rascunho')) AS propostas_andamento
+        ");
+        $stmt->execute([$workspaceId, $workspaceId, $workspaceId, $workspaceId]);
+
+        return $stmt->fetch(PDO::FETCH_ASSOC) ?: [
+            'total_clientes' => 0,
+            'clientes_ativos' => 0,
+            'receita_gerada' => 0,
+            'propostas_andamento' => 0,
+        ];
     }
 
     public function listarAtividadesRecentes(int $clienteId, int $limite = 5): array

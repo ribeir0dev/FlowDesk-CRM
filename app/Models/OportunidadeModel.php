@@ -55,6 +55,43 @@ class OportunidadeModel
         }
     }
 
+    private function clientePertenceAoWorkspace(int $clienteId): bool
+    {
+        $stmt = $this->pdo->prepare('SELECT COUNT(*) FROM clientes WHERE id = ? AND workspace_id = ?');
+        $stmt->execute([$clienteId, $this->currentWorkspaceId()]);
+
+        return (int) $stmt->fetchColumn() > 0;
+    }
+
+    private function projetoPertenceAoWorkspace(?int $projetoId, ?int $clienteId = null): bool
+    {
+        if ($projetoId === null) {
+            return true;
+        }
+
+        $sql = 'SELECT COUNT(*) FROM projetos WHERE id = ? AND workspace_id = ?';
+        $params = [$projetoId, $this->currentWorkspaceId()];
+        if ($clienteId !== null) {
+            $sql .= ' AND (cliente_id IS NULL OR cliente_id = ?)';
+            $params[] = $clienteId;
+        }
+
+        $stmt = $this->pdo->prepare($sql);
+        $stmt->execute($params);
+
+        return (int) $stmt->fetchColumn() > 0;
+    }
+
+    private function estagioPertenceAoWorkspace(int $estagioId): bool
+    {
+        $this->seedDefaultStagesIfEmpty();
+
+        $stmt = $this->pdo->prepare('SELECT COUNT(*) FROM funil_estagios WHERE id = ? AND workspace_id = ? AND ativo = 1');
+        $stmt->execute([$estagioId, $this->currentWorkspaceId()]);
+
+        return (int) $stmt->fetchColumn() > 0;
+    }
+
     public function listarEstagiosAtivos(): array
     {
         $this->seedDefaultStagesIfEmpty();
@@ -108,6 +145,20 @@ class OportunidadeModel
 
     public function criar(array $data): int
     {
+        $clienteId = (int) ($data['cliente_id'] ?? 0);
+        $projetoId = isset($data['projeto_id']) && $data['projeto_id'] !== '' ? (int) $data['projeto_id'] : null;
+        $estagioId = (int) ($data['funil_estagio_id'] ?? 0);
+
+        if (
+            $clienteId <= 0
+            || $estagioId <= 0
+            || !$this->clientePertenceAoWorkspace($clienteId)
+            || !$this->projetoPertenceAoWorkspace($projetoId, $clienteId)
+            || !$this->estagioPertenceAoWorkspace($estagioId)
+        ) {
+            return 0;
+        }
+
         $sql = "
             INSERT INTO oportunidades
                 (workspace_id, cliente_id, projeto_id, funil_estagio_id, titulo,
@@ -123,23 +174,38 @@ class OportunidadeModel
         $st = $this->pdo->prepare($sql);
         $st->execute([
             ':workspace_id' => $this->currentWorkspaceId(),
-            ':cliente_id' => (int) $data['cliente_id'],
-            ':projeto_id' => $data['projeto_id'] ?? null,
-            ':funil_estagio_id' => (int) $data['funil_estagio_id'],
-            ':titulo' => trim($data['titulo']),
+            ':cliente_id' => $clienteId,
+            ':projeto_id' => $projetoId,
+            ':funil_estagio_id' => $estagioId,
+            ':titulo' => mb_substr(trim((string) $data['titulo']), 0, 160),
             ':valor_previsto' => (float) $data['valor_previsto'],
             ':probabilidade' => (int) ($data['probabilidade'] ?? 0),
-            ':origem_lead' => $data['origem_lead'] ?? null,
-            ':responsavel' => $data['responsavel'] ?? null,
+            ':origem_lead' => mb_substr(trim((string) ($data['origem_lead'] ?? '')), 0, 120) ?: null,
+            ':responsavel' => mb_substr(trim((string) ($data['responsavel'] ?? '')), 0, 120) ?: null,
             ':data_prevista_fechamento' => $data['data_prevista_fechamento'] ?: null,
-            ':motivo_perda' => $data['motivo_perda'] ?? null,
-            ':observacoes' => $data['observacoes'] ?? null,
+            ':motivo_perda' => mb_substr(trim((string) ($data['motivo_perda'] ?? '')), 0, 500) ?: null,
+            ':observacoes' => mb_substr(trim((string) ($data['observacoes'] ?? '')), 0, 4000) ?: null,
         ]);
         return (int) $this->pdo->lastInsertId();
     }
 
     public function atualizar(int $id, array $data): bool
     {
+        $clienteId = (int) ($data['cliente_id'] ?? 0);
+        $projetoId = isset($data['projeto_id']) && $data['projeto_id'] !== '' ? (int) $data['projeto_id'] : null;
+        $estagioId = (int) ($data['funil_estagio_id'] ?? 0);
+
+        if (
+            $id <= 0
+            || $clienteId <= 0
+            || $estagioId <= 0
+            || !$this->clientePertenceAoWorkspace($clienteId)
+            || !$this->projetoPertenceAoWorkspace($projetoId, $clienteId)
+            || !$this->estagioPertenceAoWorkspace($estagioId)
+        ) {
+            return false;
+        }
+
         $sql = "
             UPDATE oportunidades
                SET cliente_id = :cliente_id,
@@ -160,22 +226,26 @@ class OportunidadeModel
         return $st->execute([
             ':id' => $id,
             ':workspace_id' => $this->currentWorkspaceId(),
-            ':cliente_id' => (int) $data['cliente_id'],
-            ':projeto_id' => $data['projeto_id'] ?? null,
-            ':funil_estagio_id' => (int) $data['funil_estagio_id'],
-            ':titulo' => trim($data['titulo']),
+            ':cliente_id' => $clienteId,
+            ':projeto_id' => $projetoId,
+            ':funil_estagio_id' => $estagioId,
+            ':titulo' => mb_substr(trim((string) $data['titulo']), 0, 160),
             ':valor_previsto' => (float) $data['valor_previsto'],
             ':probabilidade' => (int) ($data['probabilidade'] ?? 0),
-            ':origem_lead' => $data['origem_lead'] ?? null,
-            ':responsavel' => $data['responsavel'] ?? null,
+            ':origem_lead' => mb_substr(trim((string) ($data['origem_lead'] ?? '')), 0, 120) ?: null,
+            ':responsavel' => mb_substr(trim((string) ($data['responsavel'] ?? '')), 0, 120) ?: null,
             ':data_prevista_fechamento' => $data['data_prevista_fechamento'] ?: null,
-            ':motivo_perda' => $data['motivo_perda'] ?? null,
-            ':observacoes' => $data['observacoes'] ?? null,
+            ':motivo_perda' => mb_substr(trim((string) ($data['motivo_perda'] ?? '')), 0, 500) ?: null,
+            ':observacoes' => mb_substr(trim((string) ($data['observacoes'] ?? '')), 0, 4000) ?: null,
         ]);
     }
 
     public function moverEstagio(int $id, int $novoEstagioId): bool
     {
+        if (!$this->estagioPertenceAoWorkspace($novoEstagioId)) {
+            return false;
+        }
+
         $sql = "
             UPDATE oportunidades
                SET funil_estagio_id = :estagio
@@ -192,6 +262,10 @@ class OportunidadeModel
 
     public function marcarGanha(int $id, int $estagioIdGanho): bool
     {
+        if (!$this->estagioPertenceAoWorkspace($estagioIdGanho)) {
+            return false;
+        }
+
         $sql = "
             UPDATE oportunidades
                SET funil_estagio_id = :estagio,
@@ -209,6 +283,10 @@ class OportunidadeModel
 
     public function marcarPerdida(int $id, int $estagioIdPerdido, string $motivo): bool
     {
+        if (!$this->estagioPertenceAoWorkspace($estagioIdPerdido)) {
+            return false;
+        }
+
         $sql = "
             UPDATE oportunidades
                SET funil_estagio_id = :estagio,
@@ -220,7 +298,7 @@ class OportunidadeModel
         $st = $this->pdo->prepare($sql);
         return $st->execute([
             ':estagio' => $estagioIdPerdido,
-            ':motivo' => $motivo,
+            ':motivo' => mb_substr(trim($motivo), 0, 500),
             ':id' => $id,
             ':workspace_id' => $this->currentWorkspaceId(),
         ]);
@@ -228,6 +306,10 @@ class OportunidadeModel
 
     public function vincularProjeto(int $oportunidadeId, int $projetoId): bool
     {
+        if (!$this->projetoPertenceAoWorkspace($projetoId)) {
+            return false;
+        }
+
         $st = $this->pdo->prepare("
         UPDATE oportunidades
            SET projeto_id = :projeto_id

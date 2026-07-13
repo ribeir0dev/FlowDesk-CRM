@@ -4,6 +4,7 @@ if (session_status() !== PHP_SESSION_ACTIVE) {
 }
 
 require_once __DIR__ . '/../../../config/db.php';
+require_once __DIR__ . '/../../../app/Models/BillingModel.php';
 require_once __DIR__ . '/../../../app/Models/ClienteModel.php';
 
 $status_cliente = $_GET['status_cliente'] ?? ['todos'];
@@ -14,11 +15,20 @@ if (!is_array($status_cliente)) {
 $busca = trim($_GET['busca'] ?? '');
 
 $model = new ClienteModel($pdo);
+$billingModel = new BillingModel($pdo);
 $clientes_filtrados = $model->listarFiltrados($status_cliente, $busca);
+$resumoClientes = $model->resumoGeral();
+$clientesGate = $billingModel->getResourceGate((int) (fd_current_workspace_id() ?? 0), 'clients');
+$canCreateClientes = $canManageClientes = fd_has_any_role(['owner', 'admin', 'operacional']);
+$shouldShowManageSubscriptionClientes = $canManageClientes && !$clientesGate['allowed'];
 
 $contagem = count($clientes_filtrados);
+$clientesPorPagina = 5;
+$totalPaginas = max(1, (int) ceil($contagem / $clientesPorPagina));
+$paginaAtual = max(1, min((int) ($_GET['pagina'] ?? 1), $totalPaginas));
+$clientesPagina = array_slice($clientes_filtrados, ($paginaAtual - 1) * $clientesPorPagina, $clientesPorPagina);
 $clienteSelecionadoId = isset($_GET['cliente']) ? (int) $_GET['cliente'] : 0;
-$idsFiltrados = array_map(static fn(array $cli): int => (int) $cli['id'], $clientes_filtrados);
+$idsFiltrados = array_map(static fn(array $cli): int => (int) $cli['id'], $clientesPagina);
 
 if ($clienteSelecionadoId <= 0 || !in_array($clienteSelecionadoId, $idsFiltrados, true)) {
     $clienteSelecionadoId = $idsFiltrados[0] ?? 0;
@@ -29,7 +39,6 @@ $cliente = $clienteSelecionadoId > 0 ? $model->buscarPorId($clienteSelecionadoId
 $atividadesRecentes = $clienteSelecionadoId > 0 ? $model->listarAtividadesRecentes($clienteSelecionadoId) : [];
 
 $mensagens = [];
-$canManageClientes = fd_has_any_role(['owner', 'admin', 'operacional']);
 
 if (isset($_GET['ok'])) {
     $mensagens[] = ['type' => 'success', 'text' => 'Cliente salvo com sucesso.'];
@@ -37,6 +46,9 @@ if (isset($_GET['ok'])) {
 
 if (isset($_GET['erro'])) {
     $mensagens[] = ['type' => 'danger', 'text' => 'Nao foi possivel salvar o cliente.'];
+}
+if (($_GET['limit'] ?? '') === 'clients') {
+    $mensagens[] = ['type' => 'warning', 'text' => 'Seu plano atingiu o limite de clientes. Ajuste o plano para continuar cadastrando novos contatos.'];
 }
 
 $fmtMoney = static function ($value): string {
@@ -64,13 +76,25 @@ $fmtDate = static function (?string $value): string {
     return $time ? date('d/m/Y', $time) : 'Sem data';
 };
 
-$buildClienteUrl = static function (int $clienteId) use ($base, $busca, $status_cliente): string {
-    $params = ['cliente' => $clienteId];
+$buildClienteUrl = static function (int $clienteId) use ($base, $busca, $status_cliente, $paginaAtual): string {
+    $params = ['cliente' => $clienteId, 'pagina' => $paginaAtual];
 
     if ($busca !== '') {
         $params['busca'] = $busca;
     }
 
+    if (!empty($status_cliente)) {
+        $params['status_cliente'] = $status_cliente;
+    }
+
+    return ($base ?? '') . '/clientes?' . http_build_query($params);
+};
+
+$buildPaginaUrl = static function (int $pagina) use ($base, $busca, $status_cliente): string {
+    $params = ['pagina' => $pagina];
+    if ($busca !== '') {
+        $params['busca'] = $busca;
+    }
     if (!empty($status_cliente)) {
         $params['status_cliente'] = $status_cliente;
     }
@@ -88,10 +112,17 @@ $buildClienteUrl = static function (int $clienteId) use ($base, $busca, $status_
 
         <?php if ($canManageClientes): ?>
             <div class="fd-action-group">
-                <button type="button" class="fd-btn-primary" data-bs-toggle="modal" data-bs-target="#modalNovoCliente">
-                    <i class="ri-user-add-line"></i>
-                    <span>Adicionar cliente</span>
-                </button>
+                <?php if ($shouldShowManageSubscriptionClientes): ?>
+                    <a href="<?= ($base ?? '') ?>/configuracoes#pagamentos" class="fd-btn-primary">
+                        <i class="ri-vip-crown-2-line"></i>
+                        <span>Gerenciar Assinatura</span>
+                    </a>
+                <?php else: ?>
+                    <button type="button" class="fd-btn-primary" data-bs-toggle="modal" data-bs-target="#modalNovoCliente">
+                        <i class="ri-user-add-line"></i>
+                        <span>Adicionar cliente</span>
+                    </button>
+                <?php endif; ?>
             </div>
         <?php endif; ?>
     </section>
@@ -101,6 +132,25 @@ $buildClienteUrl = static function (int $clienteId) use ($base, $busca, $status_
             <?= e($mensagem['text']) ?>
         </div>
     <?php endforeach; ?>
+
+    <section class="fd-client-reference-kpis">
+        <article class="fd-client-reference-kpi is-blue">
+            <span class="fd-reference-icon"><i class="ri-group-line"></i></span>
+            <div><span>Total de clientes</span><strong><?= (int) $resumoClientes['total_clientes'] ?></strong><small>100% da base</small></div>
+        </article>
+        <article class="fd-client-reference-kpi is-green">
+            <span class="fd-reference-icon"><i class="ri-user-follow-line"></i></span>
+            <div><span>Clientes ativos</span><strong><?= (int) $resumoClientes['clientes_ativos'] ?></strong><small><?= (int) $resumoClientes['total_clientes'] > 0 ? round(((int) $resumoClientes['clientes_ativos'] / (int) $resumoClientes['total_clientes']) * 100) : 0 ?>% do total</small></div>
+        </article>
+        <article class="fd-client-reference-kpi is-violet">
+            <span class="fd-reference-icon"><i class="ri-money-dollar-circle-line"></i></span>
+            <div><span>Receita gerada</span><strong><?= $fmtMoney($resumoClientes['receita_gerada']) ?></strong><small>Historico recebido</small></div>
+        </article>
+        <article class="fd-client-reference-kpi is-orange">
+            <span class="fd-reference-icon"><i class="ri-file-list-3-line"></i></span>
+            <div><span>Propostas em andamento</span><strong><?= (int) $resumoClientes['propostas_andamento'] ?></strong><small>Aguardando decisao</small></div>
+        </article>
+    </section>
 
     <section class="fd-clientes-toolbar">
         <form method="get" action="<?= ($base ?? '') ?>/clientes" class="fd-client-search-form">
@@ -132,17 +182,19 @@ $buildClienteUrl = static function (int $clienteId) use ($base, $busca, $status_
     <section class="fd-clientes-shell">
         <aside class="fd-clientes-sidebar">
             <article class="fd-client-list-panel">
-                        <div class="fd-clientes-toolbar-copy">
-            <p class="fd-clientes-summary-text">Total de cliente<?= $contagem === 1 ? '' : 's' ?> cadastrado<?= $contagem === 1 ? '' : 's' ?>.</p>
-            <span class="fd-clientes-summary-count" aria-label="Total de clientes cadastrados"><?= $contagem ?></span>
-        </div>
-                <?php if (empty($clientes_filtrados)): ?>
+                <nav class="fd-client-status-tabs" aria-label="Filtrar clientes por status">
+                    <a href="<?= ($base ?? '') ?>/clientes?status_cliente[]=todos" class="<?= in_array('todos', $status_cliente, true) ? 'is-active' : '' ?>">Todos</a>
+                    <a href="<?= ($base ?? '') ?>/clientes?status_cliente[]=ativo" class="<?= in_array('ativo', $status_cliente, true) ? 'is-active' : '' ?>">Ativos</a>
+                    <a href="<?= ($base ?? '') ?>/clientes?status_cliente[]=potencial" class="<?= in_array('potencial', $status_cliente, true) ? 'is-active' : '' ?>">Em negociacao</a>
+                    <a href="<?= ($base ?? '') ?>/clientes?status_cliente[]=inativo" class="<?= in_array('inativo', $status_cliente, true) ? 'is-active' : '' ?>">Inativos</a>
+                </nav>
+                <?php if (empty($clientesPagina)): ?>
                     <div class="fd-empty-state fd-empty-state-compact">
                         <p class="fd-empty-copy">Nenhum cliente encontrado com os filtros atuais.</p>
                     </div>
                 <?php else: ?>
                     <div class="fd-client-list">
-                        <?php foreach ($clientes_filtrados as $cli): ?>
+                        <?php foreach ($clientesPagina as $cli): ?>
                             <?php
                             $temFoto = !empty($cli['foto_perfil']);
                             $fotoCliente = $cli['foto_perfil'] ?? '';
@@ -190,6 +242,19 @@ $buildClienteUrl = static function (int $clienteId) use ($base, $busca, $status_
                         <?php endforeach; ?>
                     </div>
                 <?php endif; ?>
+
+                <footer class="fd-client-list-footer">
+                    <p class="fd-clientes-summary-text">Exibindo <?= count($clientesPagina) ?> de <?= $contagem ?> cliente<?= $contagem === 1 ? '' : 's' ?></p>
+                    <?php if ($totalPaginas > 1): ?>
+                        <nav class="fd-client-pagination" aria-label="Paginas de clientes">
+                            <a href="<?= $buildPaginaUrl(max(1, $paginaAtual - 1)) ?>" class="<?= $paginaAtual === 1 ? 'is-disabled' : '' ?>" aria-label="Pagina anterior"><i class="ri-arrow-left-s-line"></i></a>
+                            <?php for ($pagina = 1; $pagina <= $totalPaginas; $pagina++): ?>
+                                <a href="<?= $buildPaginaUrl($pagina) ?>" class="<?= $pagina === $paginaAtual ? 'is-active' : '' ?>" <?= $pagina === $paginaAtual ? 'aria-current="page"' : '' ?>><?= $pagina ?></a>
+                            <?php endfor; ?>
+                            <a href="<?= $buildPaginaUrl(min($totalPaginas, $paginaAtual + 1)) ?>" class="<?= $paginaAtual === $totalPaginas ? 'is-disabled' : '' ?>" aria-label="Proxima pagina"><i class="ri-arrow-right-s-line"></i></a>
+                        </nav>
+                    <?php endif; ?>
+                </footer>
             </article>
         </aside>
 
@@ -273,8 +338,14 @@ $buildClienteUrl = static function (int $clienteId) use ($base, $busca, $status_
                             <span class="fd-client-metric-label">Valor em propostas</span>
                             <strong class="fd-client-metric-value"><?= $fmtMoney($clienteSelecionado['valor_orcamentos'] ?? 0) ?></strong>
                         </article>
+
+                        <article class="fd-client-metric-card">
+                            <span class="fd-client-metric-label">Ticket medio</span>
+                            <strong class="fd-client-metric-value"><?= $fmtMoney(((int) ($clienteSelecionado['total_orcamentos'] ?? 0)) > 0 ? ((float) ($clienteSelecionado['valor_orcamentos'] ?? 0) / (int) $clienteSelecionado['total_orcamentos']) : 0) ?></strong>
+                        </article>
                     </section>
 
+                    <div class="fd-client-preview-reference-grid">
                     <section class="fd-client-preview-section">
                         <div class="fd-client-context-grid">
                             <div>
@@ -321,6 +392,19 @@ $buildClienteUrl = static function (int $clienteId) use ($base, $busca, $status_
                             </div>
                         <?php endif; ?>
                     </section>
+
+                    <section class="fd-client-preview-section fd-client-notes-panel">
+                        <div class="fd-client-preview-section-head">
+                            <p class="fd-card-title">Notas rapidas</p>
+                            <i class="ri-edit-box-line"></i>
+                        </div>
+                        <p><?= htmlspecialchars($clienteSelecionado['observacoes'] ?: 'Adicione uma nota para manter o contexto comercial deste cliente.') ?></p>
+                        <div class="fd-client-preview-tags">
+                            <span>Relacionamento</span>
+                            <span><?= e($statusInfoSelecionado['label']) ?></span>
+                        </div>
+                    </section>
+                    </div>
                 </article>
             <?php endif; ?>
         </div>

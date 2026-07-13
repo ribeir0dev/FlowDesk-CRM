@@ -1,18 +1,11 @@
 <?php
-
-
-ini_set('display_errors', 1);
-ini_set('display_startup_errors', 1);
-error_reporting(E_ALL);
-
+require_once __DIR__ . '/env.php';
+fd_load_env();
+require_once __DIR__ . '/errors.php';
 
 if (session_status() === PHP_SESSION_NONE) {
-
-
-// Segurança extra para sessão
-ini_set('session.use_strict_mode', 1);
-ini_set('session.cookie_httponly', 1);
-ini_set('session.cookie_secure', 1);
-session_start();
+    ini_set('session.use_strict_mode', '1');
+    ini_set('session.cookie_httponly', '1');
+    ini_set('session.cookie_secure', (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? '1' : '0');
+    session_start();
 }
-?>

@@ -6,8 +6,8 @@ if (session_status() !== PHP_SESSION_ACTIVE) {
 require_once __DIR__ . '/../../../config/db.php';
 require_once __DIR__ . '/../../../app/Models/ClienteModel.php';
 
-$token = $_GET['token'] ?? '';
-if ($token === '') {
+$token = trim((string) ($_GET['token'] ?? ''));
+if ($token === '' || !preg_match('/^[a-f0-9]{32,128}$/i', $token)) {
     http_response_code(404);
     exit('Relatorio nao encontrado.');
 }

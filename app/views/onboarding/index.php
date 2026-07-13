@@ -195,7 +195,10 @@ $modulosIniciais = [
                     </div>
 
                     <div class="fd-onboarding-lovable-footer-right">
-                        <a href="<?= ($base ?? '') ?>/logout" class="fd-btn-ghost fd-btn-spring">Sair Agora</a>
+                        <form action="<?= ($base ?? '') ?>/logout" method="post" class="fd-inline-form">
+                            <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(csrf_token(), ENT_QUOTES, 'UTF-8') ?>">
+                            <button type="submit" class="fd-btn-ghost fd-btn-spring">Sair Agora</button>
+                        </form>
                         <button type="button" class="fd-btn-primary fd-onboarding-lovable-next fd-btn-spring" data-step-next>
                             <span>Continuar</span>
                             <i class="ri-arrow-right-line"></i>

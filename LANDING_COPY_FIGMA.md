@@ -1,4 +1,4 @@
-﻿🚀 LANDING FLOWDESK (SEO + CONVERSÃO)
+🚀 LANDING FLOWDESK (SEO + CONVERSÃO)
 🧠 1. HEADER
 
 Logo: FlowDesk
@@ -18,7 +18,7 @@ Criar conta
 🔥 2. HERO (H1 OTIMIZADO)
 Eyebrow
 
-CRM para freelancers, agências e equipes pequenas
+CRM para freelancers, agências e equipes pequenasCRM para freelancers, agências e equipes pequenas
 
 ✅ H1 (SEO + Conversão)
 

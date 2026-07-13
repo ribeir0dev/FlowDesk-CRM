@@ -23,9 +23,49 @@ switch ($acao) {
         atualizarConfiguracoes($workspaceModel);
         break;
 
+    case 'atualizar_pix_manual':
+        atualizarPixManual($workspaceModel);
+        break;
+
     default:
         header('Location: ' . fd_base_path() . '/configuracoes');
         exit;
+}
+
+function atualizarPixManual(WorkspaceModel $workspaceModel): void
+{
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+        header('Location: ' . fd_base_path() . '/configuracoes#integracoes');
+        exit;
+    }
+
+    fd_require_role(['owner', 'admin']);
+
+    $chave = trim((string) ($_POST['pix_chave'] ?? ''));
+    $nome = trim((string) ($_POST['pix_nome'] ?? ''));
+    $cidade = trim((string) ($_POST['pix_cidade'] ?? ''));
+
+    $dadosInvalidos = ($chave !== '' && mb_strlen($chave) > 160)
+        || ($nome !== '' && mb_strlen($nome) > 80)
+        || ($cidade !== '' && mb_strlen($cidade) > 60);
+
+    if ($dadosInvalidos) {
+        header('Location: ' . fd_base_path() . '/configuracoes?pix=erro&integration=pix_manual#integracoes');
+        exit;
+    }
+
+    $ok = $workspaceModel->atualizarPixManual($chave, $nome, $cidade);
+
+    if ($ok) {
+        fd_audit_log('workspace.pix_manual.update', 'workspace', fd_current_workspace_id(), [
+            'has_pix_key' => $chave !== '',
+            'pix_nome' => $nome,
+            'pix_cidade' => $cidade,
+        ]);
+    }
+
+    header('Location: ' . fd_base_path() . '/configuracoes?' . ($ok ? 'pix=ok' : 'pix=erro') . '&integration=pix_manual#integracoes');
+    exit;
 }
 
 function salvarOnboarding(WorkspaceModel $workspaceModel): void

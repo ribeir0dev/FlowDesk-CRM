@@ -1,6 +1,4 @@
 <?php
-error_reporting(E_ALL);
-ini_set('display_errors', 1);
 if (session_status() !== PHP_SESSION_ACTIVE) {
     session_start();
 }
@@ -14,8 +12,8 @@ $model = new OportunidadeModel($pdo);
 $hoje = date('Y-m-d');
 $primeiroDia = date('Y-m-01');
 
-$data_inicio = $_GET['data_inicio'] ?? $primeiroDia;
-$data_fim = $_GET['data_fim'] ?? $hoje;
+$data_inicio = preg_match('/^\d{4}-\d{2}-\d{2}$/', (string) ($_GET['data_inicio'] ?? '')) ? $_GET['data_inicio'] : $primeiroDia;
+$data_fim = preg_match('/^\d{4}-\d{2}-\d{2}$/', (string) ($_GET['data_fim'] ?? '')) ? $_GET['data_fim'] : $hoje;
 
 $totalCriadas = $model->contarCriadasPeriodo($data_inicio, $data_fim);
 $totalGanhas = $model->contarGanhasPeriodo($data_inicio, $data_fim);

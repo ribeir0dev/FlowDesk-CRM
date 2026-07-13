@@ -27,6 +27,21 @@ $dificuldadeLabels = [
 
 $dificuldadeLabel = $dificuldadeLabels[$codigo['dificuldade'] ?? 'basico'] ?? ucfirst((string) ($codigo['dificuldade'] ?? 'basico'));
 $descricao = trim((string) ($codigo['descricao'] ?? ''));
+$previewImage = trim((string) ($codigo['preview_image'] ?? ''));
+if ($previewImage !== '' && !filter_var($previewImage, FILTER_VALIDATE_URL)) {
+    $previewImage = ($base ?? '') . '/' . ltrim($previewImage, '/');
+}
+$categorias = $model->listarFiltros();
+
+$codigoMensagens = [];
+if (isset($_GET['updated'])) {
+    $codigoMensagens[] = ['type' => 'success', 'text' => 'Codigo atualizado com sucesso.'];
+}
+if (isset($_GET['erro'])) {
+    $codigoMensagens[] = ['type' => 'danger', 'text' => 'Nao foi possivel atualizar este codigo.'];
+}
+unset($_SESSION['codigo_error_detail']);
+$canManageCodigos = in_array(fd_current_workspace_role(), ['owner', 'admin', 'operacional'], true);
 ?>
 
 <div class="fd-codigo-detalhe">
@@ -43,6 +58,10 @@ $descricao = trim((string) ($codigo['descricao'] ?? ''));
             </a>
         </div>
     </section>
+
+    <?php foreach ($codigoMensagens as $mensagem): ?>
+        <div class="alert alert-<?= e($mensagem['type']) ?> mb-3" role="alert"><?= e($mensagem['text']) ?></div>
+    <?php endforeach; ?>
 
     <section class="fd-card fd-codigo-detalhe-hero fd-codigo-detalhe-shell">
         <div class="fd-codigo-detalhe-top">
@@ -65,10 +84,16 @@ $descricao = trim((string) ($codigo['descricao'] ?? ''));
                     <i class="ri-share-forward-line"></i>
                     <span>Compartilhar</span>
                 </a>
-                <button type="button" class="fd-btn-secondary fd-btn-danger-soft js-delete-codigo" data-bs-toggle="modal" data-bs-target="#modalExcluirCodigo" data-codigo-id="<?= (int) $codigo['id'] ?>" data-codigo-titulo="<?= htmlspecialchars((string) ($codigo['titulo'] ?? 'este codigo'), ENT_QUOTES) ?>">
-                    <i class="ri-delete-bin-line"></i>
-                    <span>Excluir</span>
-                </button>
+                <?php if ($canManageCodigos): ?>
+                    <button type="button" class="fd-btn-secondary" data-bs-toggle="modal" data-bs-target="#modalEditarCodigo">
+                        <i class="ri-edit-line"></i>
+                        <span>Editar</span>
+                    </button>
+                    <button type="button" class="fd-btn-secondary fd-btn-danger-soft js-delete-codigo" data-bs-toggle="modal" data-bs-target="#modalExcluirCodigo" data-codigo-id="<?= (int) $codigo['id'] ?>" data-codigo-titulo="<?= htmlspecialchars((string) ($codigo['titulo'] ?? 'este codigo'), ENT_QUOTES) ?>">
+                        <i class="ri-delete-bin-line"></i>
+                        <span>Excluir</span>
+                    </button>
+                <?php endif; ?>
             </div>
         </div>
 
@@ -77,10 +102,14 @@ $descricao = trim((string) ($codigo['descricao'] ?? ''));
                 <span class="fd-codigo-detalhe-dot"></span>
                 <span class="fd-codigo-detalhe-dot"></span>
                 <span class="fd-codigo-detalhe-dot"></span>
-                <span class="fd-codigo-detalhe-preview-label">Preview tecnico</span>
+                <span class="fd-codigo-detalhe-preview-label"><?= $previewImage !== '' ? 'Preview visual' : 'Preview tecnico' ?></span>
             </div>
             <div class="fd-codigo-detalhe-preview">
-                <pre><?= htmlspecialchars((string) ($codigo['conteudo'] ?? '')) ?></pre>
+                <?php if ($previewImage !== ''): ?>
+                    <img src="<?= htmlspecialchars($previewImage) ?>" alt="Preview de <?= htmlspecialchars((string) ($codigo['titulo'] ?? 'codigo')) ?>" class="fd-codigo-detalhe-image">
+                <?php else: ?>
+                    <pre><?= htmlspecialchars((string) ($codigo['conteudo'] ?? '')) ?></pre>
+                <?php endif; ?>
             </div>
         </div>
     </section>
@@ -172,4 +201,83 @@ document.addEventListener('DOMContentLoaded', function () {
 });
 </script>
 
+<?php if ($canManageCodigos): ?>
+<div class="modal fade" id="modalEditarCodigo" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-centered">
+        <div class="modal-content fd-modal-content">
+            <div class="modal-header fd-modal-header">
+                <div>
+                    <p class="fd-card-eyebrow">Modulo Codigos</p>
+                    <h2 class="fd-modal-title">Editar codigo</h2>
+                </div>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <form action="<?= ($base ?? '') ?>/codigos/atualizar" method="post" class="fd-modal-form" enctype="multipart/form-data">
+                <input type="hidden" name="acao" value="atualizar">
+                <input type="hidden" name="codigo_id" value="<?= (int) $codigo['id'] ?>">
+                <div class="modal-body fd-modal-body">
+                    <div class="fd-settings-fields">
+                        <div class="fd-settings-field fd-settings-field-span-2">
+                            <label class="form-label small">Titulo do codigo</label>
+                            <input type="text" name="titulo" class="form-control" value="<?= htmlspecialchars((string) ($codigo['titulo'] ?? '')) ?>" required>
+                        </div>
+                        <div class="fd-settings-field fd-settings-field-span-2">
+                            <label class="form-label small">Descricao</label>
+                            <textarea name="descricao" rows="3" class="form-control"><?= htmlspecialchars((string) ($codigo['descricao'] ?? '')) ?></textarea>
+                        </div>
+                        <div class="fd-settings-field">
+                            <label class="form-label small">Categoria</label>
+                            <input type="text" name="categoria" class="form-control" value="<?= htmlspecialchars((string) ($codigo['categoria'] ?? '')) ?>" list="codigo-categorias-editar" required>
+                            <datalist id="codigo-categorias-editar">
+                                <?php foreach ($categorias as $categoria): ?>
+                                    <option value="<?= htmlspecialchars($categoria) ?>"></option>
+                                <?php endforeach; ?>
+                            </datalist>
+                        </div>
+                        <div class="fd-settings-field">
+                            <label class="form-label small">Tipo</label>
+                            <input type="text" name="tipo" class="form-control" value="<?= htmlspecialchars((string) ($codigo['tipo'] ?? 'Snippet')) ?>">
+                        </div>
+                        <div class="fd-settings-field">
+                            <label class="form-label small">Dificuldade</label>
+                            <select name="dificuldade" class="form-select">
+                                <?php foreach ($dificuldadeLabels as $value => $label): ?>
+                                    <option value="<?= htmlspecialchars($value) ?>" <?= (($codigo['dificuldade'] ?? 'basico') === $value) ? 'selected' : '' ?>><?= htmlspecialchars($label) ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="fd-settings-field fd-settings-field-span-2">
+                            <label class="form-label small">Instrucoes de uso</label>
+                            <textarea name="instrucoes" rows="4" class="form-control"><?= htmlspecialchars((string) ($codigo['instrucoes'] ?? '')) ?></textarea>
+                        </div>
+                        <div class="fd-settings-field fd-settings-field-span-2">
+                            <label class="form-label small">Imagem de preview</label>
+                            <?php if ($previewImage !== ''): ?>
+                                <div class="fd-codigo-edit-preview-current">
+                                    <img src="<?= htmlspecialchars($previewImage) ?>" alt="Preview atual">
+                                    <span>Imagem atual. Envie outra imagem para substituir.</span>
+                                </div>
+                            <?php endif; ?>
+                            <input type="file" name="preview_image" class="form-control" accept="image/png,image/jpeg,image/gif">
+                            <p class="fd-text-muted fd-settings-help">Opcional. PNG, JPEG ou GIF ate 8MB.</p>
+                        </div>
+                        <div class="fd-settings-field fd-settings-field-span-2">
+                            <label class="form-label small">Conteudo do codigo</label>
+                            <textarea name="conteudo" rows="10" class="form-control fd-code-textarea" required><?= htmlspecialchars((string) ($codigo['conteudo'] ?? '')) ?></textarea>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer fd-modal-footer">
+                    <button type="button" class="fd-btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="fd-btn-primary">
+                        <i class="ri-save-line"></i>
+                        <span>Salvar alteracoes</span>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 <?php include __DIR__ . '/partials/modal_excluir_codigo.php'; ?>
+<?php endif; ?>

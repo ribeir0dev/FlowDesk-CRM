@@ -1,14 +1,12 @@
 <?php
-ini_set('display_errors', 1);
-ini_set('display_startup_errors', 1);
-error_reporting(E_ALL);
+require_once __DIR__ . '/../config/errors.php';
 
 if (session_status() !== PHP_SESSION_ACTIVE) {
     session_start();
 }
 require_once __DIR__ . '/../config/autoload.php';
 require_once __DIR__ . '/../app/Helpers/helpers.php';
-require_once __DIR__ . '/../app/Core/Router.php';
+require_once __DIR__ . '/../app/Core/router.php';
 
 set_exception_handler(function (Throwable $e) {
     error_log('[FlowDesk] Uncaught exception: ' . $e);

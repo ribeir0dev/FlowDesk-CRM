@@ -60,6 +60,10 @@ $icon = $servicoIcons[$servico] ?? 'ri-file-text-line';
 $bg = $servicoColors[$servico] ?? '#F3F4F6';
 $dataOrcamento = !empty($orcamento['criado_em']) ? date('d/m/Y', strtotime($orcamento['criado_em'])) : date('d/m/Y');
 $codigoStr = str_pad((string) $orcamento['codigo'], 4, '0', STR_PAD_LEFT);
+$paymentLabel = ($orcamento['forma_pagamento'] ?? '') === '50/50'
+    ? '50% de Entrada + 50% na Entrega'
+    : ($orcamento['forma_pagamento'] ?? 'Nao informado');
+$publicProposalUrl = ($base ?? '') . '/proposta/' . ($orcamento['public_code'] ?? '');
 $nomeClienteParaArquivo = preg_replace('/[^\w\- ]+/u', '', $cliente['nome']);
 $nomeArquivoPdf = "Orcamento - #{$codigoStr} - {$nomeClienteParaArquivo}.pdf";
 $primeiraLetra = strtoupper(substr(trim((string) ($cliente['nome'] ?? '')), 0, 1));
@@ -356,11 +360,11 @@ $primeiraLetra = strtoupper(substr(trim((string) ($cliente['nome'] ?? '')), 0, 1
                 </div>
                 <div>
                     <p class="eyebrow">Pagamento</p>
-                    <strong><?= htmlspecialchars($orcamento['forma_pagamento'] ?? 'Nao informado') ?></strong>
+                    <strong><?= htmlspecialchars($paymentLabel) ?></strong>
                 </div>
                 <div>
                     <p class="eyebrow">Status</p>
-                    <strong><?= htmlspecialchars($orcamento['status'] ?? 'Enviado') ?></strong>
+                    <strong><?= htmlspecialchars($orcamento['status'] ?? 'Aguardando Aprovação') ?></strong>
                 </div>
             </section>
 
@@ -419,7 +423,7 @@ $primeiraLetra = strtoupper(substr(trim((string) ($cliente['nome'] ?? '')), 0, 1
         }
 
         async function compartilharLink() {
-            const url = window.location.href;
+            const url = new URL(<?= json_encode($publicProposalUrl, JSON_UNESCAPED_SLASHES) ?>, window.location.origin).href;
             try {
                 if (navigator.clipboard && navigator.clipboard.writeText) {
                     await navigator.clipboard.writeText(url);

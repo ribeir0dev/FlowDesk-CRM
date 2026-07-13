@@ -9,6 +9,7 @@ if (!isset($pdo) || !($pdo instanceof PDO)) {
     require __DIR__ . '/../../config/db.php';
 }
 require_once __DIR__ . '/../Helpers/auth.php';
+require_once __DIR__ . '/../../app/Models/BillingModel.php';
 require_once __DIR__ . '/../../app/Models/ClienteModel.php';
 
 $clienteModel = new ClienteModel($pdo);
@@ -37,7 +38,7 @@ switch ($acao) {
         break;
 
     default:
-        header('Location: /clientes');
+        header('Location: ' . fd_base_path() . '/clientes');
         exit;
 }
 
@@ -47,33 +48,51 @@ switch ($acao) {
 function criarCliente(ClienteModel $clienteModel): void
 {
     if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-        header('Location: /clientes');
+        header('Location: ' . fd_base_path() . '/clientes');
         exit;
     }
 
-    $nome     = trim($_POST['nome'] ?? '');
-    $whatsapp = trim($_POST['whatsapp'] ?? '');
-    $email    = trim($_POST['email'] ?? '');
-    $status   = $_POST['status'] ?? 'ativo';
-    $genero   = $_POST['genero'] ?? 'empresa';
-    $obs      = trim($_POST['observacoes'] ?? '');
+    $nome     = mb_substr(trim((string) ($_POST['nome'] ?? '')), 0, 160);
+    $whatsapp = mb_substr(trim((string) ($_POST['whatsapp'] ?? '')), 0, 40);
+    $email    = mb_substr(trim((string) ($_POST['email'] ?? '')), 0, 180);
+    $status   = in_array(($_POST['status'] ?? 'ativo'), ['ativo', 'potencial', 'inativo'], true) ? $_POST['status'] : 'ativo';
+    $genero   = in_array(($_POST['genero'] ?? 'empresa'), ['masculino', 'feminino', 'empresa'], true) ? $_POST['genero'] : 'empresa';
+    $obs      = mb_substr(trim((string) ($_POST['observacoes'] ?? '')), 0, 4000);
 
-    if ($nome === '' || $whatsapp === '' || $email === '') {
-        header('Location: /clientes?erro=1');
+    if ($nome === '' || $whatsapp === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        header('Location: ' . fd_base_path() . '/clientes?erro=1');
         exit;
     }
 
-    $token_publico = gerarTokenPublico(64);
+    $billingModel = new BillingModel($GLOBALS['pdo']);
+    $workspaceId = (int) (fd_current_workspace_id() ?? 0);
+    if (!$billingModel->acquireWorkspaceBillingLock($workspaceId)) {
+        header('Location: ' . fd_base_path() . '/clientes?erro=1');
+        exit;
+    }
 
-    $clienteId = $clienteModel->criar([
-        'nome'          => $nome,
-        'whatsapp'      => $whatsapp,
-        'email'         => $email,
-        'status'        => $status,
-        'observacoes'   => $obs,
-        'genero'        => $genero,
-        'token_publico' => $token_publico,
-    ]);
+    try {
+        $gate = $billingModel->getResourceGate($workspaceId, 'clients');
+        if (!$gate['allowed']) {
+            $billingModel->releaseWorkspaceBillingLock($workspaceId);
+            header('Location: ' . fd_base_path() . '/clientes?limit=clients');
+            exit;
+        }
+
+        $token_publico = gerarTokenPublico(64);
+
+        $clienteId = $clienteModel->criar([
+            'nome'          => $nome,
+            'whatsapp'      => $whatsapp,
+            'email'         => $email,
+            'status'        => $status,
+            'observacoes'   => $obs,
+            'genero'        => $genero,
+            'token_publico' => $token_publico,
+        ]);
+    } finally {
+        $billingModel->releaseWorkspaceBillingLock($workspaceId);
+    }
 
     if ($clienteId > 0) {
         fd_audit_log('cliente.create', 'cliente', $clienteId, [
@@ -83,7 +102,7 @@ function criarCliente(ClienteModel $clienteModel): void
         ]);
     }
 
-    header('Location: /clientes?ok=1');
+    header('Location: ' . fd_base_path() . '/clientes?ok=1');
     exit;
 }
 
@@ -93,20 +112,20 @@ function criarCliente(ClienteModel $clienteModel): void
 function atualizarCliente(ClienteModel $clienteModel): void
 {
     if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-        header('Location: /clientes');
+        header('Location: ' . fd_base_path() . '/clientes');
         exit;
     }
 
     $id       = isset($_POST['id']) ? (int)$_POST['id'] : 0;
-    $nome     = trim($_POST['nome'] ?? '');
-    $whatsapp = trim($_POST['whatsapp'] ?? '');
-    $email    = trim($_POST['email'] ?? '');
-    $status   = $_POST['status'] ?? 'ativo';
-    $genero   = $_POST['genero'] ?? 'empresa';
-    $obs      = trim($_POST['observacoes'] ?? '');
+    $nome     = mb_substr(trim((string) ($_POST['nome'] ?? '')), 0, 160);
+    $whatsapp = mb_substr(trim((string) ($_POST['whatsapp'] ?? '')), 0, 40);
+    $email    = mb_substr(trim((string) ($_POST['email'] ?? '')), 0, 180);
+    $status   = in_array(($_POST['status'] ?? 'ativo'), ['ativo', 'potencial', 'inativo'], true) ? $_POST['status'] : 'ativo';
+    $genero   = in_array(($_POST['genero'] ?? 'empresa'), ['masculino', 'feminino', 'empresa'], true) ? $_POST['genero'] : 'empresa';
+    $obs      = mb_substr(trim((string) ($_POST['observacoes'] ?? '')), 0, 4000);
 
-    if ($id <= 0 || $nome === '' || $whatsapp === '' || $email === '') {
-        header('Location: /cliente?id=' . $id . '&erro=1');
+    if ($id <= 0 || $nome === '' || $whatsapp === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        header('Location: ' . fd_base_path() . '/cliente?id=' . $id . '&erro=1');
         exit;
     }
 
@@ -127,7 +146,7 @@ function atualizarCliente(ClienteModel $clienteModel): void
         ]);
     }
 
-    header('Location: /cliente?id=' . $id . ($ok ? '&ok=1' : '&erro=1'));
+    header('Location: ' . fd_base_path() . '/cliente?id=' . $id . ($ok ? '&ok=1' : '&erro=1'));
     exit;
 }
 
@@ -137,22 +156,58 @@ function atualizarCliente(ClienteModel $clienteModel): void
 function uploadFotoCliente(ClienteModel $clienteModel): void
 {
     if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-        header('Location: /clientes');
+        header('Location: ' . fd_base_path() . '/clientes');
         exit;
     }
 
     $cliente_id = isset($_POST['cliente_id']) ? (int)$_POST['cliente_id'] : 0;
 
     if ($cliente_id <= 0 || empty($_FILES['foto']['name'])) {
-        header('Location: /cliente?id=' . $cliente_id);
+        header('Location: ' . fd_base_path() . '/cliente?id=' . $cliente_id);
         exit;
     }
 
     $ext_permitidas = ['jpg', 'jpeg', 'png'];
     $ext = strtolower(pathinfo($_FILES['foto']['name'], PATHINFO_EXTENSION));
 
-    if (!in_array($ext, $ext_permitidas) || $_FILES['foto']['error'] !== UPLOAD_ERR_OK) {
-        header('Location: /cliente?id=' . $cliente_id . '&foto=erro');
+    $maxBytes = 8 * 1024 * 1024;
+    if (!in_array($ext, $ext_permitidas, true) || $_FILES['foto']['error'] !== UPLOAD_ERR_OK || (int) ($_FILES['foto']['size'] ?? 0) > $maxBytes) {
+        header('Location: ' . fd_base_path() . '/cliente?id=' . $cliente_id . '&foto=erro');
+        exit;
+    }
+
+    $clienteAtual = $clienteModel->buscarPorId($cliente_id);
+    if (!$clienteAtual) {
+        header('Location: ' . fd_base_path() . '/clientes?erro=1');
+        exit;
+    }
+
+    $tmpName = (string) ($_FILES['foto']['tmp_name'] ?? '');
+    $imageInfo = $tmpName !== '' ? @getimagesize($tmpName) : false;
+    $mime = is_array($imageInfo) ? (string) ($imageInfo['mime'] ?? '') : '';
+    if (!in_array($mime, ['image/jpeg', 'image/png'], true)) {
+        header('Location: ' . fd_base_path() . '/cliente?id=' . $cliente_id . '&foto=erro');
+        exit;
+    }
+
+    $billingModel = new BillingModel($GLOBALS['pdo']);
+    $workspaceId = (int) (fd_current_workspace_id() ?? 0);
+    if (!$billingModel->acquireWorkspaceBillingLock($workspaceId)) {
+        header('Location: ' . fd_base_path() . '/cliente?id=' . $cliente_id . '&foto=erro');
+        exit;
+    }
+
+    $replacingBytes = $billingModel->getLocalUploadSize((string) ($clienteAtual['foto_perfil'] ?? ''));
+    $gate = $billingModel->getStorageGate(
+        $workspaceId,
+        (int) ($_FILES['foto']['size'] ?? 0),
+        $replacingBytes
+    );
+
+    if (!$gate['allowed']) {
+        $billingModel->releaseWorkspaceBillingLock($workspaceId);
+        $_SESSION['billing_gate_message'] = $gate['message'];
+        header('Location: ' . fd_base_path() . '/cliente?id=' . $cliente_id . '&limit=storage');
         exit;
     }
 
@@ -170,12 +225,14 @@ function uploadFotoCliente(ClienteModel $clienteModel): void
             fd_audit_log('cliente.photo_upload', 'cliente', $cliente_id, [
                 'foto' => $caminho_db,
             ]);
-            header('Location: /cliente?id=' . $cliente_id . '&foto=ok');
+            header('Location: ' . fd_base_path() . '/cliente?id=' . $cliente_id . '&foto=ok');
+            $billingModel->releaseWorkspaceBillingLock($workspaceId);
             exit;
         }
     }
 
-    header('Location: /cliente?id=' . $cliente_id . '&foto=erro');
+    $billingModel->releaseWorkspaceBillingLock($workspaceId);
+    header('Location: ' . fd_base_path() . '/cliente?id=' . $cliente_id . '&foto=erro');
     exit;
 }
 
@@ -203,31 +260,38 @@ function buscarBlocoCliente(ClienteModel $clienteModel): void
 function salvarBlocoCliente(PDO $pdo): void
 {
     if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-        header('Location: /clientes');
+        header('Location: ' . fd_base_path() . '/clientes');
         exit;
     }
 
     $workspaceId = fd_current_workspace_id() ?? 0;
     if ($workspaceId <= 0) {
-        header('Location: /clientes?erro=1');
+        header('Location: ' . fd_base_path() . '/clientes?erro=1');
         exit;
     }
 
     $cliente_id = (int) ($_POST['cliente_id'] ?? 0);
-    $slug = trim($_POST['slug'] ?? '');
-    $titulo = trim($_POST['titulo'] ?? '');
+    $slug = mb_substr(trim((string) ($_POST['slug'] ?? '')), 0, 80);
+    $titulo = mb_substr(trim((string) ($_POST['titulo'] ?? '')), 0, 160);
     $compartilhado = isset($_POST['compartilhado']) ? 1 : 0;
+    $allowedSlugs = ['website', 'hospedagem', 'acesso_site', 'registro_br', 'observacoes', 'briefing', 'contratos'];
+
+    $clienteModel = new ClienteModel($pdo);
+    if ($cliente_id <= 0 || $slug === '' || !in_array($slug, $allowedSlugs, true) || !$clienteModel->buscarPorId($cliente_id)) {
+        header('Location: ' . fd_base_path() . '/clientes?erro=1');
+        exit;
+    }
 
     $payload = [];
 
     if ($slug === 'website') {
-        $payload['url'] = trim($_POST['url'] ?? '');
+        $payload['url'] = mb_substr(trim((string) ($_POST['url'] ?? '')), 0, 500);
     } elseif (in_array($slug, ['hospedagem', 'acesso_site', 'registro_br'], true)) {
-        $payload['url'] = trim($_POST['url'] ?? '');
-        $payload['usuario'] = trim($_POST['usuario'] ?? '');
-        $payload['senha'] = trim($_POST['senha'] ?? '');
+        $payload['url'] = mb_substr(trim((string) ($_POST['url'] ?? '')), 0, 500);
+        $payload['usuario'] = mb_substr(trim((string) ($_POST['usuario'] ?? '')), 0, 180);
+        $payload['senha'] = mb_substr(trim((string) ($_POST['senha'] ?? '')), 0, 500);
     } else {
-        $payload['livre'] = trim($_POST['conteudo_livre'] ?? '');
+        $payload['livre'] = mb_substr(trim((string) ($_POST['conteudo_livre'] ?? '')), 0, 8000);
     }
 
     $conteudoJson = json_encode($payload, JSON_UNESCAPED_UNICODE);
@@ -251,6 +315,6 @@ function salvarBlocoCliente(PDO $pdo): void
         ]);
     }
 
-    header('Location: /cliente?id=' . $cliente_id . ($ok ? '&ok_bloco=1' : '&erro=1'));
+    header('Location: ' . fd_base_path() . '/cliente?id=' . $cliente_id . ($ok ? '&ok_bloco=1' : '&erro=1'));
     exit;
 }
