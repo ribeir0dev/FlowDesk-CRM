@@ -50,40 +50,6 @@ public/              Entrada publica, assets, CSS, JS e imagens fixas
 storage/             Logs e arquivos internos nao publicos
 ```
 
-## Configuracao Local
-
-1. Clone o repositorio.
-2. Copie `.env.example` para `.env`.
-3. Ajuste as credenciais de banco e URLs no `.env`.
-4. Importe as migrations da pasta `database/migrations`.
-5. Aponte o virtual host/local server para a pasta `public`.
-
-Exemplo minimo de variaveis:
-
-```env
-APP_ENV=local
-APP_URL=http://flowdesk.local
-APP_KEY=change-me-generate-a-long-random-secret
-
-DB_HOST=localhost
-DB_NAME=db_flowdesk
-DB_USER=root
-DB_PASS=root
-```
-
-## Deploy
-
-Para producao, mantenha fora do repositorio:
-
-- `.env`
-- dumps reais de banco
-- uploads de usuarios
-- logs
-- arquivos `.zip` de deploy
-- credenciais de integracoes
-
-Use `.env.example` apenas como referencia de configuracao.
-
 ## Status do Produto
 
 O FlowDesk esta em desenvolvimento ativo. A base atual ja cobre os modulos principais do CRM, enquanto as proximas fases concentram integracoes, armazenamento externo, refinamentos de seguranca e automacoes.
